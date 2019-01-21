@@ -137,9 +137,9 @@ def read_xml_data(path):
 
 def main(path):
     content, question_answer_user_label, user_post = read_xml_data(path)
-    content_id2idx, content = convert_content_id(content)
-    user_id2idx, user_context = convert_user_id(user_post, content_id2idx)
-    question_answer_user_label = convert_question_answer_userId(question_answer_user_label, user_id2idx, content_id2idx)
+    # content_id2idx, content = convert_content_id(content)
+    # user_id2idx, user_context = convert_user_id(user_post, content_id2idx)
+    # question_answer_user_label = convert_question_answer_userId(question_answer_user_label, user_id2idx, content_id2idx)
 
     question_answer_user_label, content, user_count = idReorder(question_answer_user_label, content)
-    return content, user_context, question_answer_user_label
+    return content,  question_answer_user_label, user_count

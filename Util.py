@@ -1,56 +1,55 @@
-import torch
+
 import torch.nn as nn
+import torch
 import numpy as np
+import gensim
+import os
+from gensim.scripts.glove2word2vec import glove2word2vec
+from sklearn.metrics import average_precision_score, precision_score
 
-class contentEmbed(nn.Module):
-    def __init__(self, content:torch.LongTensor):
-        super(contentEmbed, self).__init__()
-        self.contentEmbed = nn.Embedding.from_pretrained(content)
 
-
-    def forward(self, batch_id):
-        return self.contentEmbed(batch_id)
 
 class LSTM(nn.Module):
     def __init__(self, args):
         super(LSTM, self).__init__()
         self.args = args
-        self.lstm = nn.LSTM(args.word2vec_dim, args.lstm_hidden_size, batch_first=True,
+        self.lstm = nn.LSTM(args.embed_size, args.lstm_hidden_size, batch_first=True,
                             dropout=args.drop_out_lstm, num_layers=args.lstm_num_layers,bidirectional = args.bidirectional)
 
-    def lstm_init(self):
+    def lstm_init(self, size):
         h_0_size_1 = 1
         if self.args.bidirectional:
             h_0_size_1 *= 2
         h_0_size_1 *= self.args.lstm_num_layers
-        hiddena = torch.zeros((h_0_size_1, self.args.batch_size, self.args.lstm_hidden_size),
+        hiddena = torch.zeros((h_0_size_1, size, self.args.lstm_hidden_size),
                               dtype=torch.float, device=self.args.device)
-        hiddenb = torch.zeros((h_0_size_1, self.args.batch_size, self.args.lstm_hidden_size),
+        hiddenb = torch.zeros((h_0_size_1, size, self.args.lstm_hidden_size),
                               dtype=torch.float, device=self.args.device)
         return hiddena, hiddenb
 
     def forward(self, input):
-        shape = input.shape
+        shape = [*input.shape]
+        input = input.view(-1, shape[-2], shape[-1])
         shape[-1] = self.args.lstm_hidden_size
-        input.reshape(-1, shape[-2], shape[-1])
-        hiddena, hiddenb = self.lstm_init()
-        output = self.lstm(input, hiddena, hiddenb)[1][0]
+        del shape[-2]
+        hiddena, hiddenb = self.lstm_init(input.shape[0])
+        output, _ = self.lstm(input, (hiddena, hiddenb))
         output = torch.mean(output, dim = -2)
-        output = output.view(shape)
+        output = output.view(tuple(shape))
         return output
 
 
 
-def Adjance(G, max_degree ):
+def Adjance(G, max_degree):
     nodes_count = len(G.nodes())
     adj = np.zeros((nodes_count + 1, max_degree), dtype=np.int64)
     adj_edge = np.zeros_like(adj, dtype=np.int64)
     adj_score = np.zeros_like(adj, dtype=np.float)
-    adj_degree = np.zeros_like(nodes_count,)
+    adj_degree = np.zeros(nodes_count,)
 
     for node in G.nodes():
-        assert isinstance(node, int), "[ERROR] Argument of node should be int"
-        neighbors = np.array([neighbor for neighbor in G.neighbors[node]])
+        assert not isinstance(node, str), "[ERROR] Argument of node should be int"
+        neighbors = np.array([neighbor for neighbor in G.neighbors(node)])
         adj_degree[node] = len(neighbors)
 
         if len(neighbors) == 0:
@@ -67,16 +66,11 @@ def Adjance(G, max_degree ):
         adj[node, :] = neighbors
     adj = torch.LongTensor(adj)
     adj_edge = torch.LongTensor(adj_edge)
-    adj_score = torch.FloatTensor(adj_score)
+    adj_score = torch.IntTensor(adj_score)
     #all the return are tensor
     return adj, adj_edge, adj_score
 
-import torch
-import numpy as np
-import gensim
-import os
-from gensim.scripts.glove2word2vec import glove2word2vec
-from sklearn.metrics import average_precision_score, precision_score
+
 
 def loadEmbed(file, embed_size, vocab_size, word2idx=None, Debug=True):
     # read pretrained word2vec, convert to floattensor
@@ -108,10 +102,17 @@ def loadEmbed(file, embed_size, vocab_size, word2idx=None, Debug=True):
 
         return weights
 
-# def mAP(pred, label):
-#     #label is binary
-#
-#     return average_precision_score(label, pred)
+def mAP(label, pred):
+    #label is binary
+    if isinstance(pred, torch.Tensor):
+        if (pred.is_cuda):
+            pred = pred.cpu().numpy()
+            label = label.cpu().numpy()
+        else:
+            pred = pred.numpy()
+            label = label.numpy()
+    assert len(pred) == len(label),"[ERROR] Label length not equal to prediction"
+    return average_precision_score(label, pred)
 
 def Accuracy(pred, label):
     target = 0

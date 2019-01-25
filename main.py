@@ -1,16 +1,9 @@
 import argparse
-import math
-import time
 from tqdm import tqdm
-from tqdm import trange
 #pytorch import
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from Layer.Util import  *
-from XMLHandler import xmlhandler
+from Util import  *
 from Layer import Model
-from DataSet import clasifyDataSet
+from DataSet.dataset import clasifyDataSet
 
 
 
@@ -21,19 +14,19 @@ from sklearn.model_selection import ParameterGrid
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs')
+logger = Logger('./logs_map')
 i_flag = 0
 
 def prepare_dataloaders(data, opt):
     # ========= Preparing DataLoader =========#
 
 
+
     train_loader = torch.utils.data.DataLoader(
-        clasifyDataSet(
-            G=data['G'],
-            user_count = data['user_count'],
-            args=opt
-        ),
+        clasifyDataSet(G=data['G'],
+                user_count = data['user_count'],
+                args=opt
+                ),
         num_workers=2,
         batch_size=opt.batch_size,
         shuffle=True)
@@ -43,7 +36,7 @@ def prepare_dataloaders(data, opt):
             G=data['G'],
             user_count=data['user_count'],
             args=opt,
-            Istrain=False
+            Istraining=False
         ),
         num_workers=2,
         batch_size=opt.batch_size,
@@ -51,21 +44,7 @@ def prepare_dataloaders(data, opt):
 
     return train_loader, val_loader
 
-def train_epoch_cntn(model, data, optimizer, args, epoch):
-    model.train()
-    i = 0
-    t = 0
-    t_max = len(data)
-    for batch in tqdm(
-            data, mininterval=2, desc=' --(training)--', leave=True
-    ):
-        question, good_answer, bad_answer, label = map(lambda x: x.to(args.device), batch)
-        #TODO: clip answer and question
-        optimizer.zero_grad()
-        loss, predit = model(question, good_answer, bad_answer)
-        loss.backward()
-        optimizer.step()
-        t = t + 1
+
 
 
 def train_epoch(model, data, optimizer, args, epoch):
@@ -75,8 +54,6 @@ def train_epoch(model, data, optimizer, args, epoch):
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
         q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
-        args.max_q_len = q_iter.shape[1]
-        args.max_a_len = a_iter.shape[1]
         args.batch_size = q_iter.shape[0]
         optimizer.zero_grad()
         result, predit = model(q_iter, a_iter, u_iter)
@@ -106,28 +83,26 @@ def eval_epoch(model, data, args, epoch):
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
-            q_val, a_val, u_val, gt_val, question_id = map(lambda x: x.to(args.device), batch)
-            args.max_q_len = q_val.shape[1]
-            args.max_a_len = a_val.shape[1]
+            # q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
+            q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
             args.batch_size = gt_val.shape[0]
             result, predict = model(q_val, a_val, u_val)
             loss += loss_fn(result, gt_val)
             pred_label.append(predict)
             true_label.append(gt_val)
-            question_id_list.append(question_id)
+            # question_id_list.append(question_id)
             pred_score.append(result[:,1])
 
     pred_label = torch.cat(pred_label)
     true_label = torch.cat(true_label)
     pred_score = torch.cat(pred_score)
     accuracy, zero_count, one_count = Accuracy(pred_label, true_label)
-    mean_average_precesion = Mean_Average_Precesion(true_label, pred_score, question_id_list)
-    precesion_at_one = Precesion_At_One(true_label, pred_score, question_id_list)
+    mean_average_precesion = mAP(true_label,pred_score)
+    # precesion_at_one = Precesion_At_One(true_label, pred_score, question_id_list)
     info['eval_loss'] = loss.item()
     info['eval_accuracy'] = accuracy
     info['zero_count'] = zero_count
     info['one_count'] = one_count
-    info['P@1'] = precesion_at_one
     info['mAP'] = mean_average_precesion
     for tag, value in info.items():
         logger.scalar_summary(tag, value, epoch)
@@ -151,8 +126,10 @@ def grid_search(params_dic):
 
 
 def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, content):
-    adj, adj_edge = Adjance(G, args.max_degree)
-    model = Model.InducieveLearning(args, user_count,adj,adj_edge, content, pre_trained_word2vec).to(args.device)
+    adj, adj_edge, _ = Adjance(G, args.max_degree)
+    adj = adj.to(args.device)
+    adj_edge = adj_edge.to(args.device)
+    model = Model.InducieveLearning(args, user_count,adj, adj_edge, content, pre_trained_word2vec).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     #TODO: Early stopping
@@ -181,6 +158,10 @@ def main():
     # parser.add_argument("-data",required=True)
     parser.add_argument("-no_cuda", action="store_false")
     parser.add_argument("-lr", type=float, default=0.3)
+
+    # induceive arguments
+    parser.add_argument("-max_degree", type=int, default=6)
+    parser.add_argument("-num_class", type=int, default=2)
     # 1-UIA-LSTM-CNN; 2-CNTN
     parser.add_argument("-model",type=int,default=1)
     parser.add_argument("-max_q_len", type=int, default=60)
@@ -211,13 +192,15 @@ def main():
     args.device = torch.device('cuda' if args.cuda else 'cpu')
     print("cuda : {}".format(args.cuda))
     args.DEBUG=False
+    args.neighbor_number_list = [2,3]
+    args.depth = len(args.neighbor_number_list)
     data = torch.load(args.data)
     word2ix = data['dict']
     G = data['G']
     user_count = data['user_count']
-    content = data['content']
+    content = torch.LongTensor(data['content']).to(args.device)
     train_data, val_data= prepare_dataloaders(data, args)
-    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG)
+    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
     #grid search
     # if args.model == 1:
     paragram_dic = {"lstm_hidden_size":[32, 64, 128, 256, 512],
@@ -233,6 +216,7 @@ def main():
             print("Key: {}, Value: {}".format(key, value))
             args_dic[key] = value
         args.out_channels = args.lstm_hidden_size
+        args.user_embed_dim = args.lstm_hidden_size
         train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content)
 if __name__ == '__main__':
     main()

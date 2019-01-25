@@ -13,7 +13,7 @@ class Aggregate(torch.nn.Module):
         middle = self.biliear(neighbors, edges)
         middle_act = F.relu(middle)
         #max-pooling
-        result = torch.max(middle_act, dim=1)
+        result,_ = torch.max(middle_act, dim=-2)
         return result
 
 
@@ -21,7 +21,6 @@ class NodeGenerate(torch.nn.Module):
     def __init__(self, input_dim):
         super(NodeGenerate, self).__init__()
         self.linear = nn.Linear(2*input_dim, input_dim)
-        self.normal = nn.BatchNorm1d(input_dim)
 
 
     def forward(self, item, neighbor_agg):
@@ -33,8 +32,8 @@ class NodeGenerate(torch.nn.Module):
         '''
         concat = torch.cat((item, neighbor_agg), dim = -1)
         result = self.linear(concat)
-        nn.ReLU(result, True)
-        result = self.normal(result)
+        F.relu(result, inplace=True)
+        result = F.normalize(result)
         return result
 
 class EdgeGenerate(torch.nn.Module):

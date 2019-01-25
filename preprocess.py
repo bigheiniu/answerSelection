@@ -81,16 +81,14 @@ def convert_instance_to_idx_seq(word_insts, word2idx):
 
 
 
-def GenerateGraph(question_answer_user_label, train_index, val_index, content_count):
+def GenerateGraph(question_answer_user_label, train_index, val_index):
     train_data = question_answer_user_label[train_index]
     val_data = question_answer_user_label[val_index]
     G = nx.Graph()
-    user_list = []
     for line in train_data:
         question = line[0]
         answer = line[1]
         user = line[2]
-        user_list.append(user)
         label = line[3]
         G.add_node(question)
         G.add_node(user)
@@ -99,12 +97,11 @@ def GenerateGraph(question_answer_user_label, train_index, val_index, content_co
         question = line[0]
         answer = line[1]
         user = line[2]
-        user_list.append(user)
         label = line[3]
         G.add_node(question, type=0)
         G.add_node(user, type=1)
         G.add_edge(question, user, a_id=answer, score=label, train_removed=True)
-    print("[INFO] Graph contains {} edge, contentCount is {}".format(len(G.edges()), content_count))
+    print("[INFO] Graph contains {} edge.".format(len(G.edges())))
     # print("[INFO] There are {} users, bigggest id is {}".format(len(set(user_list)), max(user_list)))
     return G
 
@@ -127,7 +124,7 @@ def main():
     parser.add_argument('-test_size', default=0.0)
 
     opt = parser.parse_args()
-    content, question_answer_user_label, user_count = xmlhandler.main(opt.raw_data)
+    content, question_answer_user_label, user_count, user_context = xmlhandler.main(opt.raw_data)
 
     content_word_list = shrink_clean_text(content, opt.max_word_seq_len)
     question_answer_user_label = np.array(question_answer_user_label)
@@ -149,7 +146,7 @@ def main():
     val_index = index[train_end: val_end]
     test_index = index[val_end:]
 
-    G = GenerateGraph(question_answer_user_label, train_index, val_index, content_count)
+    G = GenerateGraph(question_answer_user_label, train_index, val_index)
 
 
 
@@ -161,7 +158,8 @@ def main():
         'question_answer_user_val': question_answer_user_label[val_index],
         'question_answer_user_test': question_answer_user_label[test_index],
         'G': G,
-        'user_count': user_count
+        'user_count': user_count,
+        'user':user_context
     }
 
     opt.save_data="data/store.torchpickle"

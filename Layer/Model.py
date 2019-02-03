@@ -1,5 +1,5 @@
 from Layer.NeighSampler import UniformNeighborSampler
-from Layer.Aggregate import *
+from Layer.Layer import *
 from Util import *
 
 class InducieveLearning(nn.Module):

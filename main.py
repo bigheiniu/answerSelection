@@ -4,7 +4,9 @@ from tqdm import tqdm
 from Util import  *
 from Layer import Model
 from DataSet.dataset import clasifyDataSet
-
+from Layer.DPP import *
+from CoverageMetric.Similarity import *
+import itertools
 
 
 
@@ -56,7 +58,7 @@ def train_epoch(model, data, optimizer, args, epoch):
         q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
         args.batch_size = q_iter.shape[0]
         optimizer.zero_grad()
-        result, predit = model(q_iter, a_iter, u_iter)
+        result, predit, _ = model(q_iter, a_iter, u_iter)
         loss = loss_fn(result, gt_iter)
         logger.scalar_summary("train_loss",loss.item(),1)
         loss.backward()
@@ -71,12 +73,13 @@ def train_epoch(model, data, optimizer, args, epoch):
 
 
 
-def eval_epoch(model, data, args, epoch):
+def eval_epoch(model, data, args, epoch, content, user_count):
     model.eval()
     pred_label = []
     pred_score = []
     true_label = []
-    question_id_list = []
+    answer_id_dic = {}
+    relevance_dic = {}
     loss_fn = nn.NLLLoss()
     loss = 0
     with torch.no_grad():
@@ -86,12 +89,36 @@ def eval_epoch(model, data, args, epoch):
             # q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
             q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
             args.batch_size = gt_val.shape[0]
-            result, predict = model(q_val, a_val, u_val)
+            result, predict, relevance_score = model(q_val, a_val, u_val)
             loss += loss_fn(result, gt_val)
             pred_label.append(predict)
             true_label.append(gt_val)
-            # question_id_list.append(question_id)
             pred_score.append(result[:,1])
+            # if args.cuda:
+            #     question_id_list = q_val.cpu().numpy()
+            #     answer_id_list = a_val.cpu().numpy()
+            #     relevance_score = relevance_score.cpu().numpy()
+            # else:
+            #     question_id_list = q_val.numpy()
+            #     answer_id_list = a_val.numpy()
+            #     relevance_score = relevance_score.numpy()
+            #
+            # for index, question_id in enumerate(question_id_list):
+            #     question_id = question_id - user_count
+            #     if question_id in answer_id_dic:
+            #
+            #         answer_id_dic[question_id].append(answer_id_list[index] - user_count)
+            #         relevance_dic[question_id].append(relevance_score[index])
+            #     else:
+            #         answer_id_dic[question_id] = [answer_id_list[index] - user_count]
+            #         relevance_dic[question_id] = [relevance_score[index]]
+
+
+    # diversity_recommendation(answer_id_dic,relevance_dic, content=content, early_stop=0.00001, topN=3)
+
+
+
+
 
     pred_label = torch.cat(pred_label)
     true_label = torch.cat(true_label)
@@ -108,6 +135,49 @@ def eval_epoch(model, data, args, epoch):
         logger.scalar_summary(tag, value, epoch)
     print("[Info] Accuacy: {}; {} samples, {} correct prediction".format(accuracy, len(pred_label), len(pred_label) * accuracy))
     return loss, accuracy
+
+
+
+def diversity_recommendation(answe_id_dic, relevance_dic, content, early_stop, topN):
+    #init evaluate class
+    background_data = []
+    recommend_list = []
+    for question_id, answer_id_list in answe_id_dic.items():
+        answer_content = content[answer_id_list]
+        question_content = content[question_id]
+
+        background_data.append(question_content)
+        background_data += (answer_content.tolist())
+        relevance_score = relevance_dic[question_id]
+        S = diversity(answer_content, relevance_score, list(range(len(answer_content))), early_stop)
+        recommend_list.append(S)
+
+
+        #evaluate recommendation
+
+    tfidf = TFIDFSimilar(background_data)
+    # lda = LDAsimilarity(model_path=lda_model_path, background_data=background_data, topic_count=topic_count)
+
+    tfidf_score = 0
+    for recommend in recommend_list:
+        recommend = itertools.chain.from_iterable(recommend[:topN])
+        compare = itertools.chain.from_iterable(recommend)
+        tfidf_score += tfidf.simiarity(recommend, compare)
+    tfidf_score /= (len(recommend_list) * 1.0)
+
+    # info['tfidf_score']  = tfidf_score
+    logger.scalar_summary("tfidf_score", tfidf_score, 0)
+    print("[INFO] coverage ratio: {}".format(tfidf_score))
+
+
+
+
+
+
+
+
+
+
 
 def grid_search(params_dic):
     '''
@@ -131,11 +201,15 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     adj_edge = adj_edge.to(args.device)
     model = Model.InducieveLearning(args, user_count,adj, adj_edge, content, pre_trained_word2vec).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    if args.cuda:
+        _content = content.cpu().numpy()
+    else:
+        _content = content.numpy()
 
     #TODO: Early stopping
     for epoch_i in range(args.epoch):
         train_epoch(model, train_data, optimizer, args, epoch_i)
-        eval_epoch(model, val_data, args, epoch_i)
+        eval_epoch(model, val_data, args, epoch_i, content=_content, user_count=user_count)
 
 
         # print("[Info] Val Loss: {}, accuracy: {}".format(val_loss, accuracy_val))
@@ -189,7 +263,8 @@ def main():
     args.data="data/store.torchpickle"
     #===========Prepare model============#
     args.cuda =  args.no_cuda
-    args.device = torch.device('cuda' if args.cuda else 'cpu')
+    args.device = torch.device('cuda' if  args.cuda else 'cpu')
+
     print("cuda : {}".format(args.cuda))
     args.DEBUG=False
     args.neighbor_number_list = [2,3]

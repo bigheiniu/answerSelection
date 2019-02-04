@@ -39,7 +39,7 @@ class InducieveLearning(nn.Module):
 
 
 
-    def content_embed(self,batch_id):
+    def content_embed(self, batch_id):
         shape = [*batch_id.shape]
         shape.append(len(self.content[0]))
         shape = tuple(shape)
@@ -138,15 +138,16 @@ class InducieveLearning(nn.Module):
                 question_layer = user_neighbors[layer_no]
                 question_edge = user_neigbor_edge[layer_no - 1]
                 question_edge= self.a_edge_generate(question_edge, question_layer, user_neighbors[layer_no - 1])
-                question_neigbor_feature = self.q_aggregate(question_layer, question_edge, user_neighbors[layer_no - 1])
+                question_neigbor_feature = self.q_aggregate(question_layer, question_edge, user_neighbors[layer_no-1])
 
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], question_neigbor_feature)
 
         #score edge strength
         score = F.tanh(self.w_a(answer_edge) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
-        score = F.log_softmax(self.w_final(score),dim=-1)
+        score = F.log_softmax(self.w_final(score), dim=-1)
+        # relevance = F.softmax(self.w_final(score), dim=-1)
+        # relevance_score = relevance[:,1]
         predic = torch.argmax(score,dim=-1)
-
-        return score, predic
+        return score, predic, score
 
 

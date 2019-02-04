@@ -19,18 +19,18 @@ def shrink_clean_text(content, max_sent_len):
     for sent in content:
         i += 1
         words = textClean.cleanText(sent)
-        # if len(words) > max_sent_len:
-        #     trimmed_sent_count += 1
-        # elif len(words) < max_sent_len:
-        #     pad_sequence = [Constants.PAD_WORD] * (max_sent_len - len(words))
-        #     words = words + pad_sequence
-        # word_inst = words[:max_sent_len]
+        if len(words) > max_sent_len:
+            trimmed_sent_count += 1
+        elif len(words) < max_sent_len:
+            pad_sequence = [Constants.PAD_WORD] * (max_sent_len - len(words))
+            words = words + pad_sequence
+        word_inst = words[:max_sent_len]
 
-        # if word_inst:
-        word_insts += [words]
-        # else:
-        #     j += 1
-        #     word_insts += [Constants.PAD_WORD]
+        if word_inst:
+            word_insts += [word_inst]
+        else:
+            j += 1
+            word_insts += [Constants.PAD_WORD] * max_sent_len
 
     print('[Info] Get {} instances'.format(len(word_insts)))
     print('[Warning] {} instances is empty'.format(j))

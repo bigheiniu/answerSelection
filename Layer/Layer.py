@@ -25,11 +25,14 @@ class AttentionAggregate(torch.nn.Module):
     def forward(self, neighbors, edges, node):
         middle = self.bilinear(neighbors, edges)
         middle_act = F.relu(middle)
-        node = node.squeeze(1)
-        similarity = self.cos_sim(middle_act, node)
-        # every element
+        node_ = node.unsqueeze(-2)
+        # print("\n[DEBUG]: size of node is {}".format(node.shape))
+        # print("\n[DEBUG]: size of middleact is {}".format(middle_act.shape))
+        similarity = self.cos_sim(middle_act, node_)
+        # # every element
         weight = F.softmax(similarity, dim=-1)
-        result = torch.sum(weight * middle_act, dim=-2)
+        weight.unsqueeze_(-1)
+        result = torch.sum(middle_act, dim=-2)
         return result
 
 class NodeGenerate(torch.nn.Module):

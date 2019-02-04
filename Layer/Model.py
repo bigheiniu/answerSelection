@@ -26,8 +26,8 @@ class InducieveLearning(nn.Module):
         self.lstm = LSTM(args)
 
         self.sampler = UniformNeighborSampler(self.adj, self.adj_edge)
-        self.q_aggregate = Aggregate(args.lstm_hidden_size, args.lstm_hidden_size, args.lstm_hidden_size)
-        self.u_aggregate = Aggregate(args.lstm_hidden_size, args.lstm_hidden_size, args.lstm_hidden_size)
+        self.q_aggregate = AttentionAggregate(args.lstm_hidden_size, args.lstm_hidden_size, args.lstm_hidden_size)
+        self.u_aggregate = AttentionAggregate(args.lstm_hidden_size, args.lstm_hidden_size, args.lstm_hidden_size)
         self.q_node_generate = NodeGenerate(args.lstm_hidden_size)
         self.u_node_generate = NodeGenerate(args.lstm_hidden_size)
         self.a_edge_generate = EdgeGenerate()
@@ -117,28 +117,28 @@ class InducieveLearning(nn.Module):
                 question_layer = question_neighbors[layer_no]
                 question_edge = question_neighbors_edge[layer_no - 1]
                 question_edge = self.a_edge_generate(question_edge, question_layer, question_neighbors[layer_no - 1])
-                question_neighbor_feature = self.u_aggregate(question_layer, question_edge)
+                question_neighbor_feature = self.u_aggregate(question_layer, question_edge, question_neighbors[layer_no - 1])
                 question_neighbors[layer_no - 1] = self.u_node_generate(question_neighbors[layer_no - 1], question_neighbor_feature)
 
                 user_layer = user_neighbors[layer_no]
                 user_edge = user_neigbor_edge[layer_no - 1]
                 # update the edge based on two sides of nodes
                 user_edge = self.a_edge_generate(user_edge, user_layer, user_neighbors[layer_no - 1])
-                user_neigbor_feature = self.q_aggregate(user_layer, user_edge)
+                user_neigbor_feature = self.q_aggregate(user_layer, user_edge, user_neighbors[layer_no - 1])
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], user_neigbor_feature)
 
             else:
                 user_layer = question_neighbors[layer_no]
                 user_edge = question_neighbors_edge[layer_no - 1]
                 user_edge = self.a_edge_generate(user_edge, user_layer, question_neighbors[layer_no - 1])
-                user_neighbor_feature = self.q_aggregate(user_layer, user_edge)
+                user_neighbor_feature = self.q_aggregate(user_layer, user_edge, question_neighbors[layer_no-1])
                 question_neighbors[layer_no - 1] = self.q_node_generate(question_neighbors[layer_no - 1],
                                                                     user_neighbor_feature)
 
                 question_layer = user_neighbors[layer_no]
                 question_edge = user_neigbor_edge[layer_no - 1]
                 question_edge= self.a_edge_generate(question_edge, question_layer, user_neighbors[layer_no - 1])
-                question_neigbor_feature = self.q_aggregate(question_layer, question_edge)
+                question_neigbor_feature = self.q_aggregate(question_layer, question_edge, user_neighbors[layer_no - 1])
 
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], question_neigbor_feature)
 

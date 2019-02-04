@@ -1,5 +1,9 @@
 from sklearn.feature_extraction.text import TfidfTransformer
 from scipy import spatial
+import numpy as np
+import gensim
+from gensim.utils import simple_preprocess
+from gensim.models import CoherenceModel
 
 class TFIDFSimilar:
     def __init__(self, background_data):
@@ -16,11 +20,19 @@ class TFIDFSimilar:
 
 
 class LDAsimilarity:
-    def __init__(self):
-        pass
+    def __init__(self, background_data, model_path, topic_count):
+        count = []
+        for i in background_data:
+            unique, counts = np.unique(i, return_counts=True)
+            count.append(np.asarray((unique, counts)))
+        self.ldaModel = gensim.models.wrappers.LdaMallet(model_path, corpus=count, num_topics=topic_count)
+        self.topic_dis = self.ldaModel[background_data]
 
-    def similarity(self):
-        pass
+    def similarity(self, content_id, target_id):
+        content_topic = self.topic_dis[content_id]
+        target_topic = self.topic_dis[target_id]
+        return 1 - spatial.distance.cosine(content_topic, target_topic)
+
 
 
 

@@ -4,8 +4,7 @@ import torch.nn.functional as F
 import math
 
 class Aggregate(torch.nn.Module):
-    def __init__(self, input1_dim,
-                 input2_dim, bilinear_output_dim
+    def __init__(self, input1_dim, input2_dim, bilinear_output_dim
                  ):
         super(Aggregate, self).__init__()
         self.bilinear = nn.Bilinear(input1_dim, input2_dim, bilinear_output_dim)
@@ -26,10 +25,11 @@ class AttentionAggregate(torch.nn.Module):
     def forward(self, neighbors, edges, node):
         middle = self.bilinear(neighbors, edges)
         middle_act = F.relu(middle)
-
+        node = node.squeeze(1)
         similarity = self.cos_sim(middle_act, node)
+        # every element
         weight = F.softmax(similarity, dim=-1)
-        result = torch.sum(weight * middle_act,dim=-2)
+        result = torch.sum(weight * middle_act, dim=-2)
         return result
 
 class NodeGenerate(torch.nn.Module):

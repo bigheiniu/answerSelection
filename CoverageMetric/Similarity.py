@@ -1,20 +1,32 @@
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import linear_kernel
+
 from scipy import spatial
 import numpy as np
 import gensim
 from gensim.utils import simple_preprocess
-from gensim.models import CoherenceModel
+from gensim.models import CoherenceModel, LdaModel
+from gensim.corpora import  Dictionary
+from gensim.matutils import cossim
+from gensim.test.utils import datapath
+
+from joblib import dump, load
+
+
+
 
 class TFIDFSimilar:
-    def __init__(self, background_data):
-        self.bc_data = back_ground_data
-        self.count = self.get_idf()
+    def __init__(self, background_data, load_pretrain, model_path):
+        if load_pretrain:
+            self.tfModel = self.loadModel(model_path)
+        else:
+            self.bc_data = background_data
+            self.bc_vec = self.get_idf()
+            self.tfModel = TfidfTransformer()
+            self.tfModel.fit(X=self.bc_vec)
+            self.saveModel(model_path)
 
-        self.tfModel = TfidfTransformer()
-        self.tfModel.fit(X=self.count)
-
-        #TODO: Sparse matrix, Due to large number of words
     def get_idf(self):
         item, count = np.unique(self.bc_data, return_counts=True)
         count = count.reshape(len(count), 1)
@@ -25,31 +37,71 @@ class TFIDFSimilar:
         return base
 
     def simiarity(self, content, highRank):
-        i = self.tfModel.transform(content)
-        j = self.tfModel.transform(highRank)
-        return 1 - spatial.distance.cosine(i,j)
+        content_vec = np.zeros_like(self.bc_vec)
+        highRank_vec = np.zeros_like(self.bc_vec)
+        print(content)
+        for index in content:
+            content_vec[index] += 1
+        for index in highRank:
+            highRank_vec[index] += 1
+        i = self.tfModel.transform(content_vec)
+        j = self.tfModel.transform(highRank_vec)
+        cosine_similarities = linear_kernel(i,j).flatten()
+        return cosine_similarities
+
+    def saveModel(self,path):
+        dump(self.tfModel, path)
+
+    def loadModel(self,path):
+       return load(path)
+
+
+
+
+
+class LDAsimilarity:
+    def __init__(self, background_data, topic_count, load_pretrain, model_path):
+
+        if load_pretrain:
+            self.lda = self.loadModel(model_path)
+        else:
+            corpus = [self.list2tuple(line) for line in background_data]
+            self.lda = LdaModel(corpus, num_topics=topic_count)
+            self.saveModel(model_path)
+
+    def list2tuple(self, data_list):
+        data_list = np.array(data_list)
+        y = np.bincount(data_list)
+        ii = np.nonzero(y)[0]
+        return list(zip(ii, y[ii]))
+
+    def saveModel(self, path):
+        temp_file = datapath(path)
+        self.lda.save(temp_file)
+
+    def loadModel(self, path):
+        temp_file = datapath(path)
+        lda = LdaModel.load(temp_file)
+        return lda
+
+    def similarity(self, content, highrank):
+        content_corpus = self.list2tuple(content)
+        highrank_corpus = self.list2tuple(highrank)
+        lda_content_vec = self.lda[content_corpus]
+        highrank_content_vec = self.lda[highrank_corpus]
+        return cossim(lda_content_vec, highrank_content_vec)
 
 
 if __name__ == '__main__':
-    back_ground_data = np.random.randint(0, 1000, (1, 5000))
-    tfidf = TFIDFSimilar(back_ground_data)
-    content = np.random.randint(0, 1000, (1, 30))
-    highRank = np.random.randint(0, 1000, (1, 20))
-    print("score is {}".format(tfidf.simiarity(content, highRank)))
+    model_path = '/home/yichuan/course/induceiveAnswer/data/th.pi'
+    back_ground_data = np.random.randint(0, 1000, (100000, 5))
+    lda = LDAsimilarity(back_ground_data, 10, True, model_path)
+    content = np.random.randint(0, 100, (2000,))
+    highRank = np.random.randint(0, 100, (1000,))
+    print("score is {}".format(lda.similarity(content, highRank)))
 
-class LDAsimilarity:
-    def __init__(self, background_data, model_path, topic_count):
-        count = []
-        for i in background_data:
-            unique, counts = np.unique(i, return_counts=True)
-            count.append(np.asarray((unique, counts)))
-        self.ldaModel = gensim.models.wrappers.LdaMallet(model_path, corpus=count, num_topics=topic_count)
-        self.topic_dis = self.ldaModel[background_data]
 
-    def similarity(self, content_id, target_id):
-        content_topic = self.topic_dis[content_id]
-        target_topic = self.topic_dis[target_id]
-        return 1 - spatial.distance.cosine(content_topic, target_topic)
+
 
 
 

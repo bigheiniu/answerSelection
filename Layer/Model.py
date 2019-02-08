@@ -35,7 +35,10 @@ class InducieveLearning(nn.Module):
         self.w_q = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.w_a = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.w_u = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
-        self.w_final = nn.Linear(args.lstm_hidden_size, args.num_class)
+        if self.args.is_classification:
+            self.w_final = nn.Linear(args.lstm_hidden_size, args.num_class)
+        else:
+            self.w_final = nn.Linear(args.lstm_hidden_size, 1)
 
 
 
@@ -144,10 +147,16 @@ class InducieveLearning(nn.Module):
 
         #score edge strength
         score = F.tanh(self.w_a(answer_edge) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
-        score = F.log_softmax(self.w_final(score), dim=-1)
+        if self.args.is_classification:
+            score = F.log_softmax(self.w_final(score), dim=-1)
+            predic = torch.argmax(score, dim=-1)
+            return score, predic, score
+        else:
+            score = self.w_final(score)
+            return score
         # relevance = F.softmax(self.w_final(score), dim=-1)
         # relevance_score = relevance[:,1]
-        predic = torch.argmax(score,dim=-1)
-        return score, predic, score
+
+
 
 

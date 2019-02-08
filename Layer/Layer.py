@@ -140,6 +140,15 @@ def spatial_pyramid_pool( previous_conv, num_sample, previous_conv_size, out_poo
     return spp
 
 
+class PairWiseHingeLoss(nn.Module):
+    def __init__(self, margin):
+        super(PairWiseHingeLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, postive_score, negative_score):
+        loss_hinge = torch.mean(F.relu(self.margin - postive_score + negative_score))
+        return loss_hinge
+
 
 
 

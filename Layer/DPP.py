@@ -15,18 +15,18 @@ def diversity(featureMatrix, relevanceScore, rankList, early_stop):
         score = 0
         candidate = -1
         for i in rankList:
-            temp_set = copy.deepcopy(S)
-            temp_set.append(i)
-            temp_score = det(temp_set, L)
+            temp_list = copy.deepcopy(S)
+            temp_list.append(i)
+            temp_score = det(temp_list, L)
             if (score < temp_score):
                 candidate = i
                 score = temp_score
-            if candidate != -1:
-                rankList.remove(candidate)
-            else:
-                break
-            oldS = copy.deepcopy(S)
-            S.append(candidate)
+        if candidate != -1:
+            rankList.remove(candidate)
+        else:
+            break
+        oldS = copy.deepcopy(S)
+        S.append(candidate)
         if(det(S,L) - det(oldS,L) <= early_stop):
             break
     return S
@@ -38,10 +38,7 @@ def Lmatrix(featureMatrix, relevanceScore):
         for j in range(size_n):
             L[i][j] = relevanceScore[i]*relevanceScore[j]*\
                       (1 - spatial.distance.cosine(featureMatrix[i], featureMatrix[j]))
-            return L
-
-
-
+    return L
 
 def det(ids, L):
     K = L[np.ix_(ids,ids)]
@@ -49,8 +46,9 @@ def det(ids, L):
     return score
 
 if __name__ == '__main__':
-    feature_matrix = np.zeros((10,20))
-    rele = np.zeros(10)
+    feature_matrix = np.random.rand(10,20)
+    rele = np.random.rand(10)
     L = Lmatrix(feature_matrix, rele)
     rankList = list(range(len(L)))
-    diversity(feature_matrix, rele, rankList, 0.000001)
+    th = diversity(feature_matrix, rele, rankList, 0.000001)
+    print(th)

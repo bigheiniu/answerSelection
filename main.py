@@ -19,29 +19,31 @@ info = {}
 logger = Logger('./logs_map')
 i_flag = 0
 
-def prepare_dataloaders(data, opt):
+def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
 
 
 
     train_loader = torch.utils.data.DataLoader(
         clasifyDataSet(G=data['G'],
-                user_count = data['user_count'],
-                args=opt
-                ),
+                       user_count = data['user_count'],
+                       args=args,
+                       is_classification=args.is_classification
+                       ),
         num_workers=2,
-        batch_size=opt.batch_size,
+        batch_size=args.batch_size,
         shuffle=True)
 
     val_loader = torch.utils.data.DataLoader(
         clasifyDataSet(
             G=data['G'],
             user_count=data['user_count'],
-            args=opt,
-            Istraining=False
+            args=args,
+            is_classification=args.is_classification,
+            is_training=False
         ),
         num_workers=2,
-        batch_size=opt.batch_size,
+        batch_size=args.batch_size,
         shuffle=True)
 
     return train_loader, val_loader
@@ -55,14 +57,19 @@ def train_epoch(model, data, optimizer, args, epoch):
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
-        q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
-        args.batch_size = q_iter.shape[0]
-        optimizer.zero_grad()
-        result, predit, _ = model(q_iter, a_iter, u_iter)
-        loss = loss_fn(result, gt_iter)
-        logger.scalar_summary("train_loss",loss.item(),1)
-        loss.backward()
-        optimizer.step()
+        if args.is_classification:
+            q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
+            args.batch_size = q_iter.shape[0]
+            optimizer.zero_grad()
+            result, predit, _ = model(q_iter, a_iter, u_iter)
+            loss = loss_fn(result, gt_iter)
+            logger.scalar_summary("train_loss",loss.item(),1)
+            loss.backward()
+            optimizer.step()
+        else:
+            q_iter, a_pos_iter, u_pos_iter, score_pos_iter, a_neg_iter, u_pos_iter, score_neg_iter = map(lambda x: x.to(args.device), batch)
+
+
 
     for tag, value in model.named_parameters():
         if value.grad is None:

@@ -2,3 +2,4 @@
 venv/*
 *.txt
 *fuck*
+__pycache__/

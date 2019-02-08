@@ -2,10 +2,11 @@ import argparse
 from tqdm import tqdm
 #pytorch import
 from Util import  *
-from Layer import Model
+from Layer.Layer import PairWiseHingeLoss
+from Layer import Layer
 from DataSet.dataset import clasifyDataSet
 from Layer.DPP import *
-from CoverageMetric.Similarity import *
+from Metric.coverage_metric import *
 import itertools
 
 
@@ -54,6 +55,7 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, epoch):
     model.train()
     loss_fn = nn.NLLLoss()
+    loss_hinge = Layer.PairWiseHingeLoss(args.margin)
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
@@ -67,7 +69,13 @@ def train_epoch(model, data, optimizer, args, epoch):
             loss.backward()
             optimizer.step()
         else:
-            q_iter, a_pos_iter, u_pos_iter, score_pos_iter, a_neg_iter, u_pos_iter, score_neg_iter = map(lambda x: x.to(args.device), batch)
+            q_iter, a_pos_iter, u_pos_iter, _, a_neg_iter, u_neg_iter, _ = map(lambda x: x.to(args.device), batch)
+            optimizer.zero_grad()
+            score_pos = model(q_iter, a_pos_iter, u_pos_iter)
+            score_neg = model(q_iter, a_neg_iter, u_neg_iter)
+            result = loss_hinge(score_pos, score_neg)
+            result.backward()
+            optimizer.step()
 
 
 

@@ -112,7 +112,7 @@ def idReorder(question_answer_user_label, content, user_context):
         content_reorder.append(content[id])
 
 
-    return question_answer_user_label, content_reorder, user_count, user_context_reorder
+    return question_answer_user_label, content_reorder, user_context_reorder,user_count, question_count
 
 
 
@@ -142,6 +142,5 @@ def read_xml_data(path):
 
 def main(path):
     content, question_answer_user_label, user_context = read_xml_data(path)
-
-    question_answer_user_label, content, user_count, user_context = idReorder(question_answer_user_label, content, user_context)
-    return content,  question_answer_user_label, user_count, user_context
+    question_answer_user_label, content, user_context, user_count, question_count= idReorder(question_answer_user_label, content, user_context)
+    return content,  question_answer_user_label, user_context, user_count, question_count

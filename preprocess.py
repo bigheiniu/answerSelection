@@ -124,7 +124,7 @@ def main():
     parser.add_argument('-test_size', default=0.0)
 
     opt = parser.parse_args()
-    content, question_answer_user_label, user_count, user_context = xmlhandler.main(opt.raw_data)
+    content, question_answer_user_label, user_context, user_count, question_count = xmlhandler.main(opt.raw_data)
 
     content_word_list = shrink_clean_text(content, opt.max_word_seq_len)
     question_answer_user_label = np.array(question_answer_user_label)
@@ -159,6 +159,7 @@ def main():
         'question_answer_user_test': question_answer_user_label[test_index],
         'G': G,
         'user_count': user_count,
+        'question_count': question_count,
         'user':user_context
     }
 

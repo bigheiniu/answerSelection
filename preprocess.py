@@ -1,7 +1,7 @@
 ''' Handling the data io '''
 import argparse
 import torch
-from XMLHandler import xmlhandler
+from XMLHandler.XMLHandler_SemEval import xmlhandler
 from TextClean import textClean
 import numpy as np
 import networkx as nx

@@ -18,8 +18,8 @@ class rankDataSet(data.Dataset):
                  ):
         self.G = G
         self.args = args
-        self.edges = self.train_edge() if is_training else self.val_edge()
         self.question_id_list = question_id_list
+        self.is_training = is_training
 
     def random_negative(self, questionId, userId, score):
 
@@ -36,7 +36,14 @@ class rankDataSet(data.Dataset):
         return len(self.question_id_list)
 
     def __getitem__(self, idx):
-        target = []
+        question_list = []
+        answer_pos_list = []
+        user_pos_list = []
+        score_pos_list = []
+
+        answer_neg_list = []
+        user_neg_list = []
+        score_neg_list = []
         #1
         question = self.question_id_list[idx]
         # k * 1
@@ -48,13 +55,27 @@ class rankDataSet(data.Dataset):
             answer_pos = self.G[question][user_pos]['a_id']
             score_pos = self.G[question][user_pos]['score']
             user_neg = self.random_negative(question, user_pos, score_pos)
-            answer_n = self.G[question][user_neg]['a_id']
-            score_neg = self.G[question][user_neg]['score']
-            if(user_neg == -1):
-                continue
 
-            line_data = [question, answer_pos, user_pos, score_pos, answer_n, user_neg, score_neg]
-            target.append(line_data)
+            if self.is_training:
+                if(user_neg == -1):
+                    continue
+                answer_n = self.G[question][user_neg]['a_id']
+                score_neg = self.G[question][user_neg]['score']
+                answer_neg_list.append(answer_n)
+                score_neg_list.append(score_neg)
+                user_neg_list.append(user_neg)
+
+
+
+            question_list.append(question)
+            answer_pos_list.append(answer_pos)
+            user_pos_list.append(user_pos)
+            score_pos_list.append(score_pos)
+
+        if self.is_training:
+            return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list
+        else:
+            return question_list, answer_pos_list, user_pos_list, score_pos_list
 
 
 
@@ -81,15 +102,6 @@ class clasifyDataSet(data.Dataset):
         return [e for e in self.G.edges(data=True) if self.G[e[0]][e[1]]['train_removed']]
 
 
-    def random_negative(self, questionId, userId, score):
-
-        user_list = [self.G[questionId][user]['score'] < score for user in self.G.neighbors(questionId)]
-
-        while (user_list[0] == userId):
-            shuffle(user_list)
-
-        return user_list[0]
-
 
     def __len__(self):
 
@@ -102,14 +114,4 @@ class clasifyDataSet(data.Dataset):
         answer_p = self.G[edge[0]][edge[1]]['a_id']
         score_p = self.G[edge[0]][edge[1]]['score']
 
-        if self.is_classification:
-            return question, answer_p, user_p, score_p
-
-        else:
-            user_n = self.random_negative(question, user_p, score_p)
-            answer_n = self.G[question][user_n]['a_id']
-            score_n = self.G[question][user_n]['score']
-
-            # For pairwise hinge loss function
-            return question, answer_p, user_p, score_p, user_n, answer_n, score_n
-
+        return question, answer_p, user_p, score_p

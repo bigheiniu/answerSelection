@@ -7,6 +7,7 @@ from Layer import Layer
 from DataSet.dataset import clasifyDataSet
 from Layer.DPP import *
 from Metric.coverage_metric import *
+from Metric.rank_metrics import ndcg_at_k, mean_average_precision, accuracy
 import itertools
 
 
@@ -19,6 +20,8 @@ from Visualization.logger import Logger
 info = {}
 logger = Logger('./logs_map')
 i_flag = 0
+train_epoch_count = 0
+eval_epoch_count = 0
 
 def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
@@ -52,13 +55,14 @@ def prepare_dataloaders(data, args):
 
 
 
-def train_epoch(model, data, optimizer, args, epoch):
+def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss()
     loss_hinge = Layer.PairWiseHingeLoss(args.margin)
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
@@ -69,13 +73,20 @@ def train_epoch(model, data, optimizer, args, epoch):
             loss.backward()
             optimizer.step()
         else:
-            q_iter, a_pos_iter, u_pos_iter, _, a_neg_iter, u_neg_iter, _ = map(lambda x: x.to(args.device), batch)
+            question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
+            args.batch_size = question_list.shape[0]
             optimizer.zero_grad()
-            score_pos = model(q_iter, a_pos_iter, u_pos_iter)
-            score_neg = model(q_iter, a_neg_iter, u_neg_iter)
-            result = loss_hinge(score_pos, score_neg)
+            score_pos = model(question_list, answer_pos_list, user_pos_list)
+            score_neg = model(question_list, answer_neg_list, user_neg_list)
+            t = 0
+            result = 0
+            for i in count_list:
+                result += loss_hinge(score_pos[t: t + i], score_neg[t : t + i])
+                t += i
             result.backward()
             optimizer.step()
+
+    train_epoch_count += 1
 
 
 
@@ -83,8 +94,8 @@ def train_epoch(model, data, optimizer, args, epoch):
         if value.grad is None:
             continue
         tag = tag.replace('.', '/')
-        logger.histo_summary(tag, value.cpu().detach().numpy(), 1)
-        logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),1)
+        logger.histo_summary(tag, value.cpu().detach().numpy(), train_epoch_count)
+        logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),train_epoch_count)
 
 
 
@@ -101,32 +112,22 @@ def eval_epoch(model, data, args, epoch, content, user_count):
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
-            # q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
-            q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
-            args.batch_size = gt_val.shape[0]
-            result, predict, relevance_score = model(q_val, a_val, u_val)
-            loss += loss_fn(result, gt_val)
-            pred_label.append(predict)
-            true_label.append(gt_val)
-            pred_score.append(result[:,1])
-            # if args.cuda:
-            #     question_id_list = q_val.cpu().numpy()
-            #     answer_id_list = a_val.cpu().numpy()
-            #     relevance_score = relevance_score.cpu().numpy()
-            # else:
-            #     question_id_list = q_val.numpy()
-            #     answer_id_list = a_val.numpy()
-            #     relevance_score = relevance_score.numpy()
-            #
-            # for index, question_id in enumerate(question_id_list):
-            #     question_id = question_id - user_count
-            #     if question_id in answer_id_dic:
-            #
-            #         answer_id_dic[question_id].append(answer_id_list[index] - user_count)
-            #         relevance_dic[question_id].append(relevance_score[index])
-            #     else:
-            #         answer_id_dic[question_id] = [answer_id_list[index] - user_count]
-            #         relevance_dic[question_id] = [relevance_score[index]]
+            if args.is_classification:
+                q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
+                args.batch_size = gt_val.shape[0]
+                result, predict, relevance_score = model(q_val, a_val, u_val)
+                loss += loss_fn(result, gt_val)
+                pred_label.append(predict)
+                true_label.append(gt_val)
+                pred_score.append(result[:,1])
+            else:
+                q_val, a_val, u_val, gt_val, count_list = map(lambda x:x.to(args.device), batch)
+                args.batch_size = gt_val.shape[0]
+                score = model(q_val, a_val, u_val)
+                temp = 0
+
+
+
 
 
     # diversity_recommendation(answer_id_dic,relevance_dic, content=content, early_stop=0.00001, topN=3)

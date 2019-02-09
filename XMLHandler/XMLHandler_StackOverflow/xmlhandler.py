@@ -12,21 +12,25 @@ import gc
 #quesition_answer_user_vote, content_dic, \
            #title_dic, accept_answer_dic, user_context
 
+#quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context):
     user_context_reorder = {}
     user= np.array([line[2] for line in question_answer_user_vote])
-    user_id = np.unique(user)
-    user_count = len(user_id)
-    user_dic = {id:index for index, id in enumerate(user_id)}
+    user_id_ = np.unique(user)
+    user_count = len(user_id_)
+    user_dic = {id:index for index, id in enumerate(user_id_)}
+
 
     question = [line[0] for line in question_answer_user_vote]
-    answer = np.array([line[1] for line in question_answer_user_vote])
     question_id = np.unique(question)
-    question_dic = {id:index for index, id in enumerate(question_id)}
+    question_dic = {id: index for index, id in enumerate(question_id)}
     question_count = len(question_id)
 
+    answer = np.array([line[1] for line in question_answer_user_vote])
+
+
     answer_id = np.unique(answer)
-    answer_dic = {id:index + question_count for index, id in enumerate(answer_id)}
+    answer_dic = {id: index + question_count for index, id in enumerate(answer_id)}
 
     for line_index in range(len(question_answer_user_vote)):
         question_answer_user_vote[line_index][0] = question_dic[question[line_index]] + user_count
@@ -44,7 +48,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     title_reorder = []
 
     accept_answer_dic_reorder = {}
-    for flag, (id, index) in enumerate(question_dic_sort):
+    for flag, (id, index) in enumerate(question_dic_sort.items()):
         assert flag == index, "[ERROR] Title reorder problem"
         title_reorder.append(title_dic[id])
 
@@ -52,9 +56,17 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
         assert flag == index,"[ERROR] Content reorder problem"
         body_reorder.append(body_dic[id])
 
+    i = 0
     for id, index in question_dic.items():
-        accept_answer_dic_reorder[index] = answer_dic[accept_answer_dic[id]]
+        if id in accept_answer_dic:
+            t = accept_answer_dic[id]
 
+            try:
+                accept_answer_dic_reorder[index] = answer_dic[t]
+            except:
+                i += 1
+                continue
+    print("[INFO] No accepted answer, question count {}".format(i))
 
     return question_answer_user_vote, body_reorder, user_context_reorder, accept_answer_dic_reorder, title_reorder, user_count, question_count
 
@@ -75,9 +87,12 @@ def read_xml_data(path):
 
 
     for post_id, vote_count in vote_dic.items():
-        quesition_answer_user_dic[post_id].append(vote_count)
+        try:
+            quesition_answer_user_dic[post_id].append(vote_count)
+        except:
+            continue
 
-    quesition_answer_user_vote = quesition_answer_user_dic.values()
+    quesition_answer_user_vote = list(quesition_answer_user_dic.values())
 
     return quesition_answer_user_vote, body_dic, \
            title_dic, accept_answer_dic, user_context

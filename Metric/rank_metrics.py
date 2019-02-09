@@ -13,12 +13,9 @@ Learning to Rank for Information Retrieval (Tie-Yan Liu)
 import numpy as np
 
 
-#Can Hanle Batch
 def mean_reciprocal_rank(rs):
     """Score is reciprocal of the rank of the first relevant item
-
     First element is 'rank 1'.  Relevance is binary (nonzero is relevant).
-
     Example from http://en.wikipedia.org/wiki/Mean_reciprocal_rank
     >>> rs = [[0, 0, 1], [0, 1, 0], [1, 0, 0]]
     >>> mean_reciprocal_rank(rs)
@@ -29,15 +26,12 @@ def mean_reciprocal_rank(rs):
     >>> rs = [[0, 0, 0, 1], [1, 0, 0], [1, 0, 0]]
     >>> mean_reciprocal_rank(rs)
     0.75
-
     Args:
         rs: Iterator of relevance scores (list or numpy) in rank order
             (first element is the first item)
-
     Returns:
         Mean reciprocal rank
     """
-
     rs = (np.asarray(r).nonzero()[0] for r in rs)
     return np.mean([1. / (r[0] + 1) if r.size else 0. for r in rs])
 
@@ -201,9 +195,7 @@ def dcg_at_k(r, k, method=0):
             raise ValueError('method must be 0 or 1.')
     return 0.
 
-
-# Surport batch
-def ndcg_at_k(r_list, k, method=0):
+def ndcg_at_k(r, k, method=0):
     """Score is normalized discounted cumulative gain (ndcg)
 
     Relevance is positive real values.  Can use binary
@@ -211,7 +203,7 @@ def ndcg_at_k(r_list, k, method=0):
 
     Example from
     http://www.stanford.edu/class/cs276/handouts/EvaluationNew-handout-6-per.pdf
-    >>> r = [[3, 2, 3, 0, 0, 1, 2, 2, 3, 0],[1,2,3,4]]
+    >>> r = [3, 2, 3, 0, 0, 1, 2, 2, 3, 0]
     >>> ndcg_at_k(r, 1)
     unknown
     >>> r = [[2, 1, 2, 0]]
@@ -234,13 +226,10 @@ def ndcg_at_k(r_list, k, method=0):
     Returns:
         Normalized discounted cumulative gain
     """
-    scores = []
-    for r in r_list:
-        dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
-        if not dcg_max:
-            scores.append(0.)
-        scores.append(dcg_at_k(r_list, k, method) / dcg_max)
-    return np.mean(scores)
+    dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
+    if not dcg_max:
+        return 0.
+    return dcg_at_k(r, k, method) / dcg_max
 
 
 def accuracy(label, predict):

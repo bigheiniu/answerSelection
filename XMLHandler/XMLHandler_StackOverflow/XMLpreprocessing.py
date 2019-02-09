@@ -9,28 +9,48 @@ def parse_post(xmlfile):
     accept_answer_dic = {}
     tree = etree.parse(xmlfile)
     quesition_answer_user = {}
+
     for row in tree.iterfind("row"):
         post_id = int(row.attrib['Id'])
         if post_id in content_dic:
             continue
 
-        user_id = int(row.attrib['OwnerUserId'])
-        if user_id not in user_context:
-            user_context[user_id] = [post_id]
-        else:
-            user_context[user_id].append(post_id)
+
 
         post_type = row.attrib['PostTypeId']
         if post_type == '1':
             # question
             content_dic[post_id] = row.attrib['Body']
             title_dic[post_id] = row.attrib['Title']
-            accept_answer_dic[post_id] = row.attrib['AcceptedAnswerId']
+            try:
+                accept_answer_dic[post_id] = int(row.attrib['AcceptedAnswerId'])
+            except:
+                continue
 
-        else:
+        elif post_type == '2':
             #Answer
+            try:
+                user_id = int(row.attrib['OwnerUserId'])
+            except:
+                continue
+            if user_id < 0:
+                continue
+
+            if user_id not in user_context:
+                user_context[user_id] = [post_id]
+            else:
+                user_context[user_id].append(post_id)
+
+
             content_dic[post_id] = row.attrib["Body"]
-            question_id = int(row.attrib['ParentId'])
+            try:
+                if "ParentID" in row.attrib:
+                    question_id = int(row.attrib['ParentID'])
+                else:
+                    question_id = int(row.attrib['ParentId'])
+            except:
+                print("[ERROR] ParentId could not find in {}".format(row.attrib))
+                exit(-1)
             line = [question_id, post_id, user_id]
             quesition_answer_user[post_id] = line
 

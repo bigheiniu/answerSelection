@@ -4,9 +4,12 @@ import numpy as np
 import torch
 from Constants import Constants
 from random import shuffle
+import itertools
 
 
 
+def my_clloect_fn(batch):
+    return tuple(torch.LongTensor(list(itertools.chain.from_iterable(i))) for i in batch)
 
 
 class rankDataSet(data.Dataset):
@@ -73,9 +76,13 @@ class rankDataSet(data.Dataset):
             score_pos_list.append(score_pos)
 
         if self.is_training:
-            return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list
+            return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, [len(question_list)]
         else:
-            return question_list, answer_pos_list, user_pos_list, score_pos_list
+            index = np.argsort(-1 * np.array(score_pos_list))
+            answer_pos_list = list(np.array(answer_pos_list)[index])
+            user_pos_list = list(np.array(user_pos_list)[index])
+            score_pos_list = list(np.array(score_pos_list)[index])
+            return question_list, answer_pos_list, user_pos_list, score_pos_list, [len(question_list)]
 
 
 

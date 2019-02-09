@@ -41,6 +41,7 @@ def cleanText(text):
     text = re.sub(r"e - mail", "email", text)
     text = re.sub(r"j k", "jk", text)
     text = re.sub(r"\s{2,}", " ", text)
+    text = re.sub(r"(\s)&[a-zA-Z0-9_#]", r'\1', text)
 
 
 

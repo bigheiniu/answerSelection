@@ -1,7 +1,9 @@
 ''' Handling the data io '''
 import argparse
 import torch
-from XMLHandler.XMLHandler_SemEval import xmlhandler
+# from XMLHandler.XMLHandler_SemEval import xmlhandler
+from Util import content_len_statics
+from XMLHandler.XMLHandler_StackOverflow import xmlhandler
 from TextClean import textClean
 import numpy as np
 import networkx as nx
@@ -19,13 +21,13 @@ def shrink_clean_text(content, max_sent_len):
     for sent in content:
         i += 1
         words = textClean.cleanText(sent)
-        if len(words) > max_sent_len:
-            trimmed_sent_count += 1
-        elif len(words) < max_sent_len:
-            pad_sequence = [Constants.PAD_WORD] * (max_sent_len - len(words))
-            words = words + pad_sequence
-        word_inst = words[:max_sent_len]
-
+        # if len(words) > max_sent_len:
+        #     trimmed_sent_count += 1
+        # elif len(words) < max_sent_len:
+        #     pad_sequence = [Constants.PAD_WORD] * (max_sent_len - len(words))
+        #     words = words + pad_sequence
+        # word_inst = words[:max_sent_len]
+        word_inst = words
         if word_inst:
             word_insts += [word_inst]
         else:
@@ -85,11 +87,18 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
     train_data = question_answer_user_label[train_index]
     val_data = question_answer_user_label[val_index]
     G = nx.Graph()
+    t = [1 for i in question_answer_user_label if len(i) == 3]
+    ap = np.sum(t)
+    print("[INFO] No Vote Answer: {}, All Answer: {}".format(ap, len(question_answer_user_label)))
     for line in train_data:
         question = line[0]
         answer = line[1]
         user = line[2]
-        label = line[3]
+        try:
+            label = line[3]
+        except:
+            # no vote
+            label = 0
         G.add_node(question)
         G.add_node(user)
         G.add_edge(question, user, a_id=answer, score=label, train_removed=False)
@@ -97,7 +106,11 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
         question = line[0]
         answer = line[1]
         user = line[2]
-        label = line[3]
+        try:
+            label = line[3]
+        except:
+            # no vote
+            label = 0
         G.add_node(question, type=0)
         G.add_node(user, type=1)
         G.add_edge(question, user, a_id=answer, score=label, train_removed=True)
@@ -109,7 +122,7 @@ def main():
     ''' Main function '''
     parser = argparse.ArgumentParser()
     # add by yichuan li
-    parser.add_argument('-raw_data',default="data/v3.2/")
+    parser.add_argument('-raw_data',default="/home/yichuan/course/data")
 
 
 
@@ -124,29 +137,35 @@ def main():
     parser.add_argument('-test_size', default=0.0)
 
     opt = parser.parse_args()
-    content, question_answer_user_label, user_context, user_count, question_count = xmlhandler.main(opt.raw_data)
+    question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count = xmlhandler.main(opt.raw_data)
 
-    content_word_list = shrink_clean_text(content, opt.max_word_seq_len)
-    question_answer_user_label = np.array(question_answer_user_label)
+    content_word_list = shrink_clean_text(body, opt.max_word_seq_len)
+    title_world_list = shrink_clean_text(title, opt.max_word_seq_len)
+    question_answer_user_vote = np.array(question_answer_user_vote)
 
     # Build vocabulary
-    word2idx = build_vocab_idx(content_word_list, opt.min_word_count)
+    word2idx = build_vocab_idx(content_word_list + title_world_list, opt.min_word_count)
     # word to index
-    print('[Info] Convert  word instances into sequences of word index.')
+    print('[DEBUG] Convert  word instances into sequences of word index.')
+    title_id = convert_instance_to_idx_seq(title_world_list, word2idx)
     word_id = convert_instance_to_idx_seq(content_word_list, word2idx)
 
+    info_content = content_len_statics(word_id)
+    info_title = content_len_statics(title_id)
+    print('[INFO] content length infomation: {}'.format(info_content))
+    print('[INFO] title length information: {}'.format(info_title))
     #split train-valid-test dataset
 
-    index = np.arange(len(question_answer_user_label))
+    index = np.arange(len(question_answer_user_vote))
     np.random.shuffle(index)
-    length = len(question_answer_user_label)
+    length = len(question_answer_user_vote)
     train_end = int(opt.train_size * length)
     val_end = int(opt.val_size * length) + train_end
     train_index = index[:train_end]
     val_index = index[train_end: val_end]
     test_index = index[val_end:]
 
-    G = GenerateGraph(question_answer_user_label, train_index, val_index)
+    G = GenerateGraph(question_answer_user_vote, train_index, val_index)
 
 
 
@@ -154,16 +173,17 @@ def main():
         'settings': opt,
         'dict': word2idx,
         'content': word_id,
-        'question_answer_user_train': question_answer_user_label[train_index],
-        'question_answer_user_val': question_answer_user_label[val_index],
-        'question_answer_user_test': question_answer_user_label[test_index],
+        'title': title_id,
+        'question_answer_user_train': question_answer_user_vote[train_index],
+        'question_answer_user_val': question_answer_user_vote[val_index],
+        'question_answer_user_test': question_answer_user_vote[test_index],
         'G': G,
         'user_count': user_count,
         'question_count': question_count,
         'user':user_context
     }
 
-    opt.save_data="data/store.torchpickle"
+    opt.save_data="data/store_stackoverflow.torchpickle"
     print('[Info] Dumping the processed data to pickle file', opt.save_data)
     torch.save(data, opt.save_data)
     print('[Info] Finish.')

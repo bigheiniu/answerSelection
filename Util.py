@@ -90,5 +90,12 @@ def content_len_statics(content_list):
     return info
 
 
+def tensorTonumpy(data, is_gpu):
+    if is_gpu:
+        return data.cpu().numpy()
+    else:
+        return data.numpu()
+
+
 
 

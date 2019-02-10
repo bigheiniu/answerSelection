@@ -11,6 +11,7 @@ Learning to Rank for Information Retrieval (Tie-Yan Liu)
 # raw url: https://gist.github.com/bwhite/3726239
 # raw url: https://blog.csdn.net/lujiandong1/article/details/77123805
 import numpy as np
+from sklearn.metrics import average_precision_score
 
 
 def mean_reciprocal_rank(rs):
@@ -104,6 +105,14 @@ def precision_at_k(r_list, k):
     return np.mean(scores)
 
 
+
+def average_precision_scikit(y_true, y_score):
+    return mean_average_precision(y_true, y_score)
+
+def mean_average_precision_scikit(y_true_list, y_score_list):
+    result = [mean_average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)]
+    return np.mean(result)
+
 def average_precision(r):
     """Score is average precision (area under PR curve)
 
@@ -130,27 +139,23 @@ def average_precision(r):
     return np.mean(out)
 
 
-#Hanle batch
 def mean_average_precision(rs):
     """Score is mean average precision
-
     Relevance is binary (nonzero is relevant).
-
     >>> rs = [[1, 1, 0, 1, 0, 1, 0, 0, 0, 1]]
     >>> mean_average_precision(rs)
     0.78333333333333333
     >>> rs = [[1, 1, 0, 1, 0, 1, 0, 0, 0, 1], [0]]
     >>> mean_average_precision(rs)
     0.39166666666666666
-
     Args:
         rs: Iterator of relevance scores (list or numpy) in rank order
             (first element is the first item)
-
     Returns:
         Mean average precision
     """
     return np.mean([average_precision(r) for r in rs])
+
 
 
 def dcg_at_k(r, k, method=0):
@@ -232,11 +237,11 @@ def ndcg_at_k(r, k, method=0):
     return dcg_at_k(r, k, method) / dcg_max
 
 
-def accuracy(label, predict):
+def Accuracy(label, predict):
     target = 0
     zero_count = 0
     one_count = 0
-    assert len(predict) == len(label), "length not equal"
+    assert len(predict) == len(label), "[ERROR] Length not equal"
     for i in range(len(predict)):
         if predict[i] == 0:
             zero_count += 1

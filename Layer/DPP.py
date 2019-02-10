@@ -7,7 +7,6 @@ from scipy import spatial
 
 
 def diversity(featureMatrix, relevanceScore, rankList, early_stop):
-    oldS = []
     S = [rankList[0]]
     rankList.remove(S[0])
     L = Lmatrix(featureMatrix, relevanceScore)

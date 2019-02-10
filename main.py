@@ -7,7 +7,7 @@ from Layer import Layer
 from DataSet.dataset import clasifyDataSet
 from Layer.DPP import *
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, mean_average_precision, accuracy
+from Metric.rank_metrics import ndcg_at_k, mean_average_precision_scikit, Accuracy, precision_at_k, mean_reciprocal_rank
 import itertools
 
 
@@ -64,10 +64,10 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
     ):
 
         if args.is_classification:
-            q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
+            q_iter, a_iter, u_iter, gt_iter, _ = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
             optimizer.zero_grad()
-            result, predit, _ = model(q_iter, a_iter, u_iter)
+            result, predit = model(q_iter, a_iter, u_iter)
             loss = loss_fn(result, gt_iter)
             logger.scalar_summary("train_loss",loss.item(),1)
             loss.backward()
@@ -99,33 +99,115 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
 
 
 
-def eval_epoch(model, data, args, epoch, content, user_count):
+def eval_epoch(model, data, args, eval_epoch_count):
     model.eval()
     pred_label = []
     pred_score = []
     true_label = []
-    answer_id_dic = {}
-    relevance_dic = {}
+    label_score_order = []
+    diversity_answer_recommendation = []
+    question_list = []
+    info_test = {}
     loss_fn = nn.NLLLoss()
     loss = 0
+    ndcg_loss = 0
+    query_count = 0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
             if args.is_classification:
-                q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
+                q_val, a_val, u_val, gt_val, count = map(lambda x: x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
-                result, predict, relevance_score = model(q_val, a_val, u_val)
+                result, predict, feature_matrix = model(q_val, a_val, u_val, True)
                 loss += loss_fn(result, gt_val)
-                pred_label.append(predict)
-                true_label.append(gt_val)
-                pred_score.append(result[:,1])
-            else:
-                q_val, a_val, u_val, gt_val, count_list = map(lambda x:x.to(args.device), batch)
-                args.batch_size = gt_val.shape[0]
-                score = model(q_val, a_val, u_val)
-                temp = 0
 
+
+                pred_label.append(tensorTonumpy(predict, args.cuda))
+                true_label.append(tensorTonumpy(gt_val, args.cuda))
+
+                count = tensorTonumpy(count, args.cuda)
+                relevance_score = tensorTonumpy(result[:,1], args.cuda)
+                feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
+                pred_score.append(relevance_score)
+                temp = 0
+                question_list.append(tensorTonumpy(q_val, args.cuda))
+
+                for i in count:
+                    score_ = relevance_score[temp:temp + i]
+                    #label order based on predicted score
+                    label = true_label[-1][temp:temp+i]
+                    sorted_index = np.argsort(-score_)
+                    label = label[sorted_index]
+                    label_score_order.append(label)
+
+                    #coverage metric
+                    #index -> [0-k]
+                    candidate_answer_index = diversity(feature_matrix, score_, sorted_index, args.dpp_early_stop)
+                    #id -> [10990, 12334, 1351]
+                    candidate_answer_id = tensorTonumpy(a_val[temp:temp+i][candidate_answer_index], args.cuda)
+                    diversity_answer_recommendation.append(candidate_answer_id)
+                    temp += i
+            else:
+                q_val, a_val, u_val, gt_val, count = map(lambda x:x.to(args.device), batch)
+                args.batch_size = gt_val.shape[0]
+                relevance_score, feature_matrix = model(q_val, a_val, u_val, True)
+                count = tensorTonumpy(count, args.cuda)
+                relevance_score = tensorTonumpy(relevance_score, args.cuda)
+                temp = 0
+                feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
+                gt_val = tensorTonumpy(gt_val, args.cuda)
+                question_list.append(tensorTonumpy(q_val, args.gpu))
+                for i in count:
+                    score_ = relevance_score[temp:temp+i]
+                    sorted_index = np.argsort(-score_)
+                    # ground truth sorted based on generated score order
+                    score_sorted = gt_val[sorted_index]
+                    ndcg_loss += ndcg_at_k(score_sorted, args.ndcg_k)
+                    temp += i
+                    query_count += 1
+
+                    # coverage metric
+                    # index -> [0-k]
+                    candidate_answer_index = diversity(feature_matrix, score_, sorted_index,
+                                                       args.dpp_early_stop)
+                    # id -> [10990, 12334, 1351]
+                    candidate_answer_id = tensorTonumpy(a_val[temp:temp + i][candidate_answer_index], args.cuda)
+                    diversity_answer_recommendation.append(candidate_answer_id)
+                    temp += i
+
+
+    #coverage_metric
+    if args.is_classification:
+        pred_label_flatt = list(itertools.chain.from_iterable(pred_label))
+        true_label_flatt = list(itertools.chain.from_iterable(true_label))
+        score_list_flatt = list(itertools.chain.from_iterable(pred_score))
+
+        accuracy, zero_count, one_count = Accuracy(pred_label_flatt, true_label_flatt)
+        mAP = mean_average_precision_scikit(true_label_flatt, score_list_flatt)
+        pat1 = precision_at_k(label_score_order, 1)
+        mpr = mean_reciprocal_rank(label_score_order)
+
+        # visualize the data
+        info_test['eval_loss'] = loss.item()
+        info_test['eval_accuracy'] = accuracy
+        info_test['zero_count'] = zero_count
+        info_test['one_count'] = one_count
+        info_test['mAP'] = mAP
+        info_test['P@1'] = pat1
+        info_test['mPR'] = mpr
+
+        print("[Info] Accuacy: {}; {} samples, {} correct prediction".format(accuracy, len(pred_label), len(pred_label) * accuracy))
+        print("[Info] mAP: {}\n".format(mAP))
+        eval_epoch_count += 1
+    else:
+        mean_ndcgg = ndcg_loss * 1.0 / query_count
+        info_test['nDCGG'] = mean_ndcgg
+
+
+
+    for tag, value in info_test.items():
+        logger.scalar_summary(tag, value, eval_epoch_count)
 
 
 
@@ -134,56 +216,34 @@ def eval_epoch(model, data, args, epoch, content, user_count):
 
 
 
-
-
-    pred_label = torch.cat(pred_label)
-    true_label = torch.cat(true_label)
-    pred_score = torch.cat(pred_score)
-    accuracy, zero_count, one_count = Accuracy(pred_label, true_label)
-    mean_average_precesion = mAP(true_label,pred_score)
-    # precesion_at_one = Precesion_At_One(true_label, pred_score, question_id_list)
-    info['eval_loss'] = loss.item()
-    info['eval_accuracy'] = accuracy
-    info['zero_count'] = zero_count
-    info['one_count'] = one_count
-    info['mAP'] = mean_average_precesion
-    for tag, value in info.items():
-        logger.scalar_summary(tag, value, epoch)
-    print("[Info] Accuacy: {}; {} samples, {} correct prediction".format(accuracy, len(pred_label), len(pred_label) * accuracy))
-    return loss, accuracy
-
-
-
-def diversity_recommendation(answe_id_dic, relevance_dic, content, early_stop, topN):
+def diversity_evaluation(diversity_answer_recommendation, background_list, content, lda_topic, coverage_metric_model_pretrain,
+                         coverage_metric_model_path, topK):
     #init evaluate class
     background_data = []
-    recommend_list = []
-    for question_id, answer_id_list in answe_id_dic.items():
-        answer_content = content[answer_id_list]
-        question_content = content[question_id]
+    for content_id in background_list:
+        background_data.append(content[content_id])
+    tfidf = TFIDFSimilar(background_data, coverage_metric_model_pretrain, coverage_metric_model_path)
+    lda = LDAsimilarity(background_data, coverage_metric_model_pretrain, coverage_metric_model_path, lda_topic)
+    tf_idf_score = 0
+    lda_score = 0
+    question_count = len(diversity_answer_recommendation)
+    for candidate_answer_list in diversity_answer_recommendation:
+        candidate_word_space = []
+        temp_tfidf_score = 0
+        temp_lda_score = 0
+        for answer in candidate_answer_list:
+            answer_content = content[answer]
+            candidate_word_space += answer_content
+        for top_answer in candidate_answer_list[:topK]:
+            top_answer_content = content[top_answer]
+            temp_tfidf_score += tfidf.simiarity(candidate_word_space, top_answer_content)
+            temp_lda_score += lda.similarity(candidate_word_space, top_answer_content)
 
-        background_data.append(question_content)
-        background_data += (answer_content.tolist())
-        relevance_score = relevance_dic[question_id]
-        S = diversity(answer_content, relevance_score, list(range(len(answer_content))), early_stop)
-        recommend_list.append(S)
 
+        tf_idf_score += temp_tfidf_score
+        lda_score += temp_lda_score
+    return (tf_idf_score * 1.0) / question_count, (lda_score * 1.0) / question_count
 
-        #evaluate recommendation
-
-    tfidf = TFIDFSimilar(background_data)
-    # lda = LDAsimilarity(model_path=lda_model_path, background_data=background_data, topic_count=topic_count)
-
-    tfidf_score = 0
-    for recommend in recommend_list:
-        recommend = itertools.chain.from_iterable(recommend[:topN])
-        compare = itertools.chain.from_iterable(recommend)
-        tfidf_score += tfidf.simiarity(recommend, compare)
-    tfidf_score /= (len(recommend_list) * 1.0)
-
-    # info['tfidf_score']  = tfidf_score
-    logger.scalar_summary("tfidf_score", tfidf_score, 0)
-    print("[INFO] coverage ratio: {}".format(tfidf_score))
 
 
 
@@ -279,7 +339,7 @@ def main():
     args.data="data/store.torchpickle"
     #===========Prepare model============#
     args.cuda =  args.no_cuda
-    args.device = torch.device('cuda' if  args.cuda else 'cpu')
+    args.device = torch.device('cuda' if args.cuda else 'cpu')
 
     print("cuda : {}".format(args.cuda))
     args.DEBUG=False

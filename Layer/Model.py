@@ -1,6 +1,7 @@
 from Layer.NeighSampler import UniformNeighborSampler
 from Layer.Layer import *
 from Util import *
+from Layer import DPP
 
 class InducieveLearning(nn.Module):
     def __init__(self, args,
@@ -8,13 +9,15 @@ class InducieveLearning(nn.Module):
                  adj,
                  adj_edge,
                  content,
-                 word2vec
+                 word2vec,
+                 need_diversity=False
                  ):
         super(InducieveLearning, self).__init__()
         self.args = args
         self.adj = adj
         self.adj_edge = adj_edge
         self.user_count = user_count
+        self.need_diversity = need_diversity
 
         ##############
         #  network structure init
@@ -35,10 +38,13 @@ class InducieveLearning(nn.Module):
         self.w_q = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.w_a = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.w_u = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
+
+
         if self.args.is_classification:
             self.w_final = nn.Linear(args.lstm_hidden_size, args.num_class)
         else:
             self.w_final = nn.Linear(args.lstm_hidden_size, 1)
+
 
 
 
@@ -66,9 +72,16 @@ class InducieveLearning(nn.Module):
         return neighbor_node, neighbor_edge
 
 
+    def diversity_recomend(self, relevance_score_list, feature_matrix):
+        relevance_score_list = tensorTonumpy(relevance_score_list, self.args.cuda)
+        rankList = np.argsort(-relevance_score_list)
+        feature_matrix = tensorTonumpy(feature_matrix, self.args.cuda)
+        candidate_answer = DPP.diversity(feature_matrix, relevance_score_list, rankList, self.args.dpp_early_stop)
+        return candidate_answer
 
 
-    def forward(self, question, answer_edge, user):
+
+    def forward(self, question, answer_edge, user, need_feature=False):
         #sample neighbors
         # q <- a -> u <- a -> u
         # u <- a -> q <- a -> q
@@ -108,7 +121,7 @@ class InducieveLearning(nn.Module):
         answer_embed_layer = self.content_embed(answer_edge - self.user_count)
         answer_embed_word2vec = self.word2vec_embed(answer_embed_layer)
         answer_lstm_embed = self.lstm(answer_embed_word2vec)
-        answer_edge = answer_lstm_embed
+        answer_edge_feaure = answer_lstm_embed
 
 
 
@@ -146,17 +159,42 @@ class InducieveLearning(nn.Module):
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], question_neigbor_feature)
 
         #score edge strength
-        score = F.tanh(self.w_a(answer_edge) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
+        score = F.tanh(self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
         if self.args.is_classification:
             score = F.log_softmax(self.w_final(score), dim=-1)
             predic = torch.argmax(score, dim=-1)
-            return score, predic, score
+            return_list = [score, predic]
         else:
             score = self.w_final(score)
-            return score
-        # relevance = F.softmax(self.w_final(score), dim=-1)
-        # relevance_score = relevance[:,1]
+            return_list = [score]
+        if need_feature:
+            feature_matrix = self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0])
+            return_list.append(feature_matrix)
 
+        return tuple(return_list)
+
+
+        #
+        # if self.training or not self.need_diversity:
+        #     if self.args.is_classification:
+        #         if predic == -1:
+        #             exit(-1)
+        #         return score, predic
+        #     else:
+        #         return score
+        # else:
+        #     feature_matrix = self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0])
+        #     candidate_answer_list = []
+        #     temp = 0
+        #     for i in count_list:
+        #         feature_sub_matrix = feature_matrix[temp:temp + i]
+        #         relevance_sub_list = score[temp:temp+i]
+        #         candidate_answer_index = self.diversity_recomend(feature_sub_matrix, relevance_sub_list)
+        #         candidate_answer_id_order = answer_edge[candidate_answer_index]
+        #         candidate_answer_list.append(candidate_answer_id_order)
+        #     if self.args.is_classification:
+        #         #tensor, tensor, numpy, numpy
+        #         return score, predic, tensorTonumpy(question,self.args.gpu), candidate_answer_list
 
 
 

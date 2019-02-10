@@ -2,33 +2,45 @@ from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 
-from scipy import spatial
 import numpy as np
-import gensim
-from gensim.utils import simple_preprocess
-from gensim.models import CoherenceModel, LdaModel
-from gensim.corpora import  Dictionary
+from gensim.models import LdaModel
 from gensim.matutils import cossim
 from gensim.test.utils import datapath
 
 from joblib import dump, load
+import os
+import itertools
+
+
+
+
+class CoverMetricClass:
+    def __init__(self, backgroudn_data, load_pretrain, model_path, lda_topic):
+        self.tf_idf = TFIDFSimilar(backgroudn_data, load_pretrain, model_path)
+        self.lda = LDAsimilarity(backgroudn_data, load_pretrain, model_path, lda_topic)
+
+    def similarity(self, content, highRank):
+        return self.tf_idf.simiarity(content, highRank), self.lda.similarity(content, highRank)
+
 
 
 
 
 class TFIDFSimilar:
     def __init__(self, background_data, load_pretrain, model_path):
+        file_name = "tfidf.model"
+        model_path = os.path.join(model_path, file_name)
         if load_pretrain:
+
             self.tfModel = self.loadModel(model_path)
         else:
-            self.bc_data = background_data
-            self.bc_vec = self.get_idf()
+            self.bc_vec = self.get_idf(background_data)
             self.tfModel = TfidfTransformer()
             self.tfModel.fit(X=self.bc_vec)
             self.saveModel(model_path)
 
-    def get_idf(self):
-        item, count = np.unique(self.bc_data, return_counts=True)
+    def get_idf(self, background_data):
+        item, count = np.unique(list(itertools.chain.from_iterable(background_data)), return_counts=True)
         count = count.reshape(len(count), 1)
         item = item.reshape(len(item), 1)
         base = np.zeros((1, np.max(item) + 1))
@@ -61,7 +73,8 @@ class TFIDFSimilar:
 
 class LDAsimilarity:
     def __init__(self, background_data, topic_count, load_pretrain, model_path):
-
+        file_name = 'lda.model'
+        model_path = os.path.join(model_path, file_name)
         if load_pretrain:
             self.lda = self.loadModel(model_path)
         else:

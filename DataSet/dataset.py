@@ -78,10 +78,10 @@ class rankDataSet(data.Dataset):
         if self.is_training:
             return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, [len(question_list)]
         else:
-            index = np.argsort(-1 * np.array(score_pos_list))
-            answer_pos_list = list(np.array(answer_pos_list)[index])
-            user_pos_list = list(np.array(user_pos_list)[index])
-            score_pos_list = list(np.array(score_pos_list)[index])
+            # index = np.argsort(-1 * np.array(score_pos_list))
+            # answer_pos_list = list(np.array(answer_pos_list)[index])
+            # user_pos_list = list(np.array(user_pos_list)[index])
+            # score_pos_list = list(np.array(score_pos_list)[index])
             return question_list, answer_pos_list, user_pos_list, score_pos_list, [len(question_list)]
 
 
@@ -89,36 +89,33 @@ class rankDataSet(data.Dataset):
 class clasifyDataSet(data.Dataset):
 
     def __init__(self,
-                 G, user_count,
+                 G,
                  args,
-                 question_count = -1,
-                 is_classification=True,
-                 is_training=True
+                 question_list
                  ):
         self.G = G
         self.args = args
-        self.user_count = user_count
-        self.edges = self.train_edge() if is_training else self.val_edge()
-        self.is_classification = is_classification
-        self.question_count = question_count
+        self.question_list = question_list
 
-    def train_edge(self):
-        return [e for e in self.G.edges(data=True) if not self.G[e[0]][e[1]]['train_removed']]
-
-    def val_edge(self):
-        return [e for e in self.G.edges(data=True) if self.G[e[0]][e[1]]['train_removed']]
 
 
 
     def __len__(self):
-
-        return len(self.edges)
+        return len(self.question_list)
 
     def __getitem__(self, idx):
-        edge = self.edges[idx]
-        question = max(edge[0:2])
-        user_p = min(edge[0:2])
-        answer_p = self.G[edge[0]][edge[1]]['a_id']
-        score_p = self.G[edge[0]][edge[1]]['score']
+        question_id = self.question_list[idx]
+        users = self.G.neighbors[question_id]
+        question_list = []
+        user_list = []
+        label_list = []
+        answer_list = []
+        for user in users:
+            answer = self.G[question_id][user]['a_id']
+            label = self.G[question_id][user]['score']
+            question_list.append(question_id)
+            user_list.append(user)
+            answer_list.append(answer)
+            label_list.append(label)
 
-        return question, answer_p, user_p, score_p
+        return question_list, answer_list, label_list, user_list, [len(question_list)]

@@ -3,7 +3,7 @@ from tqdm import tqdm
 #pytorch import
 from Util import  *
 from Layer.Layer import PairWiseHingeLoss
-from Layer import Layer
+from Layer import Layer, Model
 from DataSet.dataset import clasifyDataSet
 from Layer.DPP import *
 from Metric.coverage_metric import *
@@ -106,6 +106,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     true_label = []
     label_score_order = []
     diversity_answer_recommendation = []
+    val_answer_list = []
     question_list = []
     info_test = {}
     loss_fn = nn.NLLLoss()
@@ -143,10 +144,12 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
                     #coverage metric
                     #index -> [0-k]
-                    candidate_answer_index = diversity(feature_matrix, score_, sorted_index, args.dpp_early_stop)
+                    top_answer_index = diversity(feature_matrix, score_, sorted_index, args.dpp_early_stop)
                     #id -> [10990, 12334, 1351]
-                    candidate_answer_id = tensorTonumpy(a_val[temp:temp+i][candidate_answer_index], args.cuda)
-                    diversity_answer_recommendation.append(candidate_answer_id)
+                    top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
+                    val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
+                    val_answer_list.append(val_answer)
+                    diversity_answer_recommendation.append(top_answer_id)
                     temp += i
             else:
                 q_val, a_val, u_val, gt_val, count = map(lambda x:x.to(args.device), batch)
@@ -169,15 +172,15 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
                     # coverage metric
                     # index -> [0-k]
-                    candidate_answer_index = diversity(feature_matrix, score_, sorted_index,
+                    top_answer_index = diversity(feature_matrix, score_, sorted_index,
                                                        args.dpp_early_stop)
                     # id -> [10990, 12334, 1351]
-                    candidate_answer_id = tensorTonumpy(a_val[temp:temp + i][candidate_answer_index], args.cuda)
-                    diversity_answer_recommendation.append(candidate_answer_id)
+                    top_answer_id = tensorTonumpy(a_val[temp:temp + i][top_answer_index], args.cuda)
+                    diversity_answer_recommendation.append(top_answer_id)
                     temp += i
 
 
-    #coverage_metric
+
     if args.is_classification:
         pred_label_flatt = list(itertools.chain.from_iterable(pred_label))
         true_label_flatt = list(itertools.chain.from_iterable(true_label))
@@ -204,26 +207,27 @@ def eval_epoch(model, data, args, eval_epoch_count):
         mean_ndcgg = ndcg_loss * 1.0 / query_count
         info_test['nDCGG'] = mean_ndcgg
 
+    #coverage metric
+
 
 
     for tag, value in info_test.items():
         logger.scalar_summary(tag, value, eval_epoch_count)
 
-
+    return diversity_answer_recommendation, val_answer_list
 
 
     # diversity_recommendation(answer_id_dic,relevance_dic, content=content, early_stop=0.00001, topN=3)
 
 
 
-def diversity_evaluation(diversity_answer_recommendation, background_list, content, lda_topic, coverage_metric_model_pretrain,
-                         coverage_metric_model_path, topK):
+def diversity_evaluation(diversity_answer_recommendation, background_list, content, topK, tfidf, lda):
     #init evaluate class
     background_data = []
     for content_id in background_list:
         background_data.append(content[content_id])
-    tfidf = TFIDFSimilar(background_data, coverage_metric_model_pretrain, coverage_metric_model_path)
-    lda = LDAsimilarity(background_data, coverage_metric_model_pretrain, coverage_metric_model_path, lda_topic)
+    # tfidf = TFIDFSimilar(background_data, coverage_metric_model_pretrain, coverage_metric_model_path)
+    # lda = LDAsimilarity(background_data, coverage_metric_model_pretrain, coverage_metric_model_path, lda_topic)
     tf_idf_score = 0
     lda_score = 0
     question_count = len(diversity_answer_recommendation)
@@ -275,20 +279,31 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     adj, adj_edge, _ = Adjance(G, args.max_degree)
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
-    model = Model.InducieveLearning(args, user_count,adj, adj_edge, content, pre_trained_word2vec).to(args.device)
+    model = Model.InducieveLearningQA(args, user_count, adj, adj_edge, content, pre_trained_word2vec).to(args.device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+
+    #load coverage model
+    tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
+    lda = LDAsimilarity(content, args.cov_pretrain, args.cov_model_path, args.lda_topic)
+    info_val = {}
     if args.cuda:
         _content = content.cpu().numpy()
     else:
         _content = content.numpy()
 
-    #TODO: Early stopping
     for epoch_i in range(args.epoch):
         train_epoch(model, train_data, optimizer, args, epoch_i)
-        eval_epoch(model, val_data, args, epoch_i, content=_content, user_count=user_count)
 
+        diversity_answer_recommendation, background_list = eval_epoch(model, val_data, args, eval_epoch_count)
+        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, background_list, content, args.div_topK, tfidf, lda)
 
+        info_val['tfidf_cov'] = tfidf_cov
+        info_val['lda_cov'] = lda_cov
+        for tag, value in info_val.items():
+            logger.scalar_summary(tag, value, eval_epoch_count)
         # print("[Info] Val Loss: {}, accuracy: {}".format(val_loss, accuracy_val))
+
         # test_loss, accuracy_test = eval_epoch(model, test_data, args, epoch_i)
         # print("[Info] Test Loss: {}, accuracy: {}".format(test_loss, accuracy_test))
 
@@ -330,6 +345,9 @@ def main():
     parser.add_argument("-in_channels", type=int, default=1)
     parser.add_argument("-out_channels", type=int, default=20)
     parser.add_argument("-kernel_size", type=int, default=3)
+
+    #coverage model path
+    parser.add_argument("-cov_model_path", default="result")
 
 
     args = parser.parse_args()

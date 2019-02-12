@@ -3,7 +3,7 @@ from Layer.Layer import *
 from Util import *
 from Layer import DPP
 
-class InducieveLearning(nn.Module):
+class InducieveLearningQA(nn.Module):
     def __init__(self, args,
                  user_count,
                  adj,
@@ -12,7 +12,7 @@ class InducieveLearning(nn.Module):
                  word2vec,
                  need_diversity=False
                  ):
-        super(InducieveLearning, self).__init__()
+        super(InducieveLearningQA, self).__init__()
         self.args = args
         self.adj = adj
         self.adj_edge = adj_edge

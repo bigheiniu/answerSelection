@@ -4,7 +4,7 @@ from tqdm import tqdm
 from Util import  *
 from Layer.Layer import PairWiseHingeLoss
 from Layer import Layer, Model
-from DataSet.dataset import clasifyDataSet
+from DataSet.dataset import clasifyDataSet, rankDataSet
 from Layer.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision_scikit, Accuracy, precision_at_k, mean_reciprocal_rank
@@ -27,9 +27,10 @@ def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
 
 
+    if args.is_classification:
 
-    train_loader = torch.utils.data.DataLoader(
-        clasifyDataSet(G=data['G'],
+        train_loader = torch.utils.data.DataLoader(
+            clasifyDataSet(G=data['G'],
                        user_count = data['user_count'],
                        args=args,
                        is_classification=args.is_classification
@@ -38,7 +39,7 @@ def prepare_dataloaders(data, args):
         batch_size=args.batch_size,
         shuffle=True)
 
-    val_loader = torch.utils.data.DataLoader(
+        val_loader = torch.utils.data.DataLoader(
         clasifyDataSet(
             G=data['G'],
             user_count=data['user_count'],
@@ -49,7 +50,14 @@ def prepare_dataloaders(data, args):
         num_workers=2,
         batch_size=args.batch_size,
         shuffle=True)
+    else:
+        train_loader = torch.utils.data.DataLoader(
+            rankDataSet(
 
+            ),
+            num_wor
+
+        )
     return train_loader, val_loader
 
 
@@ -349,12 +357,15 @@ def main():
     #coverage model path
     parser.add_argument("-cov_model_path", default="result")
 
+    #data for rank or classify
+    parser.add_argument("-is_classification", action='store_false')
+
 
     args = parser.parse_args()
     #===========Load DataSet=============#
 
 
-    args.data="data/store.torchpickle"
+    args.data="data/store_stackoverflow.torchpickle"
     #===========Prepare model============#
     args.cuda =  args.no_cuda
     args.device = torch.device('cuda' if args.cuda else 'cpu')

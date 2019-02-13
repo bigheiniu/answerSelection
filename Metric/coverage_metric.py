@@ -14,13 +14,13 @@ import itertools
 
 
 
-class CoverMetricClass:
-    def __init__(self, backgroudn_data, load_pretrain, model_path, lda_topic):
-        self.tf_idf = TFIDFSimilar(backgroudn_data, load_pretrain, model_path)
-        self.lda = LDAsimilarity(backgroudn_data, load_pretrain, model_path, lda_topic)
-
-    def similarity(self, content, highRank):
-        return self.tf_idf.simiarity(content, highRank), self.lda.similarity(content, highRank)
+# class CoverMetricClass:
+#     def __init__(self, backgroudn_data, load_pretrain, model_path, lda_topic):
+#         self.tf_idf = TFIDFSimilar(backgroudn_data, load_pretrain, model_path)
+#         self.lda = LDAsimilarity(backgroudn_data, load_pretrain, model_path, lda_topic)
+#
+#     def similarity(self, content, highRank):
+#         return self.tf_idf.simiarity(content, highRank), self.lda.similarity(content, highRank)
 
 
 
@@ -73,8 +73,9 @@ class TFIDFSimilar:
 
 class LDAsimilarity:
     def __init__(self, background_data, topic_count, load_pretrain, model_path):
-        file_name = 'lda.model'
-        model_path = os.path.join(model_path, file_name)
+        file_name = "lda.model"
+
+        model_path = os.path.join(os.path.abspath(model_path), file_name)
         if load_pretrain:
             self.lda = self.loadModel(model_path)
         else:

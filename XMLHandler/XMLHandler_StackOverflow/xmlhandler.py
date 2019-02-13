@@ -9,37 +9,53 @@ import collections
 import gc
 
 
-#quesition_answer_user_vote, content_dic, \
-           #title_dic, accept_answer_dic, user_context
+
 
 #quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context):
     user_context_reorder = {}
     user= np.array([line[2] for line in question_answer_user_vote])
     user_id_ = np.unique(user)
-    user_count = len(user_id_)
+    user_length = len(user_id_)
     user_dic = {id:index for index, id in enumerate(user_id_)}
 
 
     question = [line[0] for line in question_answer_user_vote]
-    question_id = np.unique(question)
-    question_dic = {id: index for index, id in enumerate(question_id)}
-    question_count = len(question_id)
+    question_id_freq = list(zip(*np.unique(question, return_counts=True)))
+
+    # remove question only have one answer
+    _index = 0
+    question_dic = {}
+    for id, freq in question_id_freq:
+        if freq > 1:
+            question_dic[id] = _index
+            _index += 1
+        else:
+            continue
+    question_count = len(question_dic)
 
     answer = np.array([line[1] for line in question_answer_user_vote])
-
-
     answer_id = np.unique(answer)
     answer_dic = {id: index + question_count for index, id in enumerate(answer_id)}
 
+    remove_question_answer_user_vote = []
     for line_index in range(len(question_answer_user_vote)):
-        question_answer_user_vote[line_index][0] = question_dic[question[line_index]] + user_count
-        question_answer_user_vote[line_index][1] = answer_dic[answer[line_index]] + user_count
-        question_answer_user_vote[line_index][2] = user_dic[user[line_index]]
-    for user_id, context in user_context.items():
-        user_context_reorder[user_dic[user_id]] = context
+        question = question_answer_user_vote[line_index][0]
+        if question in question_dic:
+            question = question + user_length
+            answer = answer_dic[question_answer_user_vote[line_index][1]] + user_length
+            user = user_dic[question_answer_user_vote[line_index][2]]
+            try:
+                score = question_answer_user_vote[line_index][3]
+            except:
+                score = 0
+            temp = [question, answer, user, score]
+            remove_question_answer_user_vote.append(temp)
+        else:
+            continue
 
-    gc.collect()
+    for user_id, context in user_context.items():
+        user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context]
     post_dic =  {**question_dic, **answer_dic}
     post_dic = collections.OrderedDict(sorted(post_dic.items(), key=lambda x: x[1]))
     body_reorder = []
@@ -68,7 +84,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
                 continue
     print("[INFO] No accepted answer, question count {}".format(i))
 
-    return question_answer_user_vote, body_reorder, user_context_reorder, accept_answer_dic_reorder, title_reorder, user_count, question_count
+    return remove_question_answer_user_vote, body_reorder, user_context_reorder, accept_answer_dic_reorder, title_reorder, user_length, question_count
 
 
 

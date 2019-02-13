@@ -8,8 +8,34 @@ import itertools
 
 
 
-def my_clloect_fn(batch):
-    return tuple(torch.LongTensor(list(itertools.chain.from_iterable(i))) for i in batch)
+def my_clloect_fn_train(batch):
+    # btach = list(zip(*batch))
+    # return batch
+    question_list = torch.LongTensor(list(itertools.chain.from_iterable([item[0]for item in batch])))
+    answer_pos_list = torch.LongTensor(list(itertools.chain.from_iterable([item[1] for item in batch])))
+    user_pos_list = torch.LongTensor(list(itertools.chain.from_iterable([item[2] for item in batch])))
+    score_pos_list = torch.FloatTensor(list(itertools.chain.from_iterable([item[3] for item in batch])))
+    answer_neg_list = torch.LongTensor(list(itertools.chain.from_iterable([item[4] for item in batch])))
+    user_neg_list = torch.LongTensor(list(itertools.chain.from_iterable([item[5] for item in batch])))
+    score_neg_list = torch.FloatTensor(list(itertools.chain.from_iterable([item[6] for item in batch])))
+    count_list = torch.IntTensor(list(itertools.chain.from_iterable([item[7] for item in batch])))
+    return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list
+
+def my_collect_fn_test(batch):
+    question_list = torch.LongTensor(list(itertools.chain.from_iterable([item[0]for item in batch])))
+    answer_list = torch.LongTensor(list(itertools.chain.from_iterable([item[1] for item in batch])))
+    user_list = torch.LongTensor(list(itertools.chain.from_iterable([item[2] for item in batch])))
+    score_list = torch.FloatTensor(list(itertools.chain.from_iterable([item[3] for item in batch])))
+    count_list = torch.IntTensor(list(itertools.chain.from_iterable([item[7] for item in batch])))
+    return question_list, answer_list, user_list, score_list, count_list
+
+def classify_collect_fn(batch):
+    question_list = torch.LongTensor(list(itertools.chain.from_iterable([item[0] for item in batch])))
+    answer_list = torch.LongTensor(list(itertools.chain.from_iterable([item[1] for item in batch])))
+    user_list = torch.LongTensor(list(itertools.chain.from_iterable([item[2] for item in batch])))
+    label_list = torch.IntTensor(list(itertools.chain.from_iterable([item[3] for item in batch])))
+    count_list = torch.IntTensor(list(itertools.chain.from_iterable([item[7] for item in batch])))
+    return question_list, answer_list, user_list, label_list, count_list
 
 
 class rankDataSet(data.Dataset):
@@ -26,7 +52,7 @@ class rankDataSet(data.Dataset):
 
     def random_negative(self, questionId, userId, score):
 
-        user_list = [self.G[questionId][user]['score'] < score for user in self.G.neighbors(questionId)]
+        user_list = [user for user in self.G.neighbors(questionId) if self.G[questionId][user]['score'] < score]
         if len(user_list) < 1:
             return -1
         while (user_list[0] == userId):
@@ -50,7 +76,14 @@ class rankDataSet(data.Dataset):
         #1
         question = self.question_id_list[idx]
         # k * 1
-        user_list = self.G.neighbors(question)
+        user_list = list(self.G.neighbors(question))
+        #test
+        for t in question_list:
+            try:
+                fuck = self.G.neighbors(t)
+            except:
+                print("[ERROR] node missing")
+                exit(-1)
 
 
         #generate negative answer
@@ -105,7 +138,7 @@ class clasifyDataSet(data.Dataset):
 
     def __getitem__(self, idx):
         question_id = self.question_list[idx]
-        users = self.G.neighbors[question_id]
+        users = self.G.neighbors(question_id)
         question_list = []
         user_list = []
         label_list = []

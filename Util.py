@@ -5,7 +5,10 @@ import numpy as np
 import gensim
 import os
 from gensim.scripts.glove2word2vec import glove2word2vec
-from sklearn.metrics import average_precision_score, precision_score
+from sklearn.model_selection import train_test_split
+import collections
+import matplotlib.pyplot as plt
+
 
 
 
@@ -16,8 +19,7 @@ def Adjance(G, max_degree):
     adj = np.zeros((nodes_count + 1, max_degree), dtype=np.int64)
     adj_edge = np.zeros_like(adj, dtype=np.int64)
     adj_score = np.zeros_like(adj, dtype=np.float)
-    adj_degree = np.zeros(nodes_count,)
-
+    adj_degree = np.zeros(nodes_count + 1,)
     for node in G.nodes():
         assert not isinstance(node, str), "[ERROR] Argument of node should be int"
         neighbors = np.array([neighbor for neighbor in G.neighbors(node)])
@@ -96,6 +98,32 @@ def tensorTonumpy(data, is_gpu):
     else:
         return data.numpu()
 
+
+def train_test_split_len(question_count):
+    question_list = list(range(question_count))
+    question_train_list, question_test_list = train_test_split(question_list, random_state=91)
+    return np.array(question_train_list), np.array(question_test_list)
+
+def graph_eval(G, user_count):
+    user_degree_list = sorted([d for n, d in G.degree() if n < user_count], reverse=True)
+    question_degree_list = sorted([d for n, d in G.degree() if n > user_count], reverse=True)
+    user_degree_count = collections.Counter(user_degree_list)
+    question_degree_count = collections.Counter(question_degree_list)
+    user_deg, user_cnt = zip(*user_degree_count.items())
+    question_deg, question_cnt = zip(*question_degree_count.items())
+
+    return (user_deg, user_cnt),(question_deg, question_cnt)
+
+def plot_bar(deg, cnt, figure_path):
+    fig, ax = plt.subplots()
+    plt.bar(deg, cnt, width=0.80, color='b')
+
+    plt.title("Degree Histogram")
+    plt.ylabel("Count")
+    plt.xlabel("Degree")
+    ax.set_xticks([d + 0.4 for d in deg])
+    ax.set_xticklabels(deg)
+    plt.savefig(figure_path, dpi=150)
 
 
 

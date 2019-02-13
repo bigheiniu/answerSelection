@@ -1,5 +1,5 @@
 from Layer.NeighSampler import UniformNeighborSampler
-from Layer.Layer import *
+from Layer.layer import *
 from Util import *
 from Layer import DPP
 

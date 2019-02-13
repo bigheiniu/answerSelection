@@ -1,0 +1,9 @@
+.idea/
+venv/
+*.txt
+*fuck*
+__pycache__/
+logs_map/
+data/
+result/
+

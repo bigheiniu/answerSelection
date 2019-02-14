@@ -23,7 +23,11 @@ class AttentionAggregate(torch.nn.Module):
         self.cos_sim = nn.CosineSimilarity(dim=-1)
 
     def forward(self, neighbors, edges, node):
-        middle = self.bilinear(neighbors, edges)
+        try:
+            middle = self.bilinear(neighbors, edges)
+        except:
+            print("[ERROR] neighbors shape {}, edges shape {}".format(neighbors, edges))
+            exit()
         middle_act = F.relu(middle)
         node_ = node.unsqueeze(-2)
         # print("\n[DEBUG]: size of node is {}".format(node.shape))

@@ -14,10 +14,10 @@ import gc
 #quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context):
     user_context_reorder = {}
-    user= np.array([line[2] for line in question_answer_user_vote])
-    user_id_ = np.unique(user)
-    user_length = len(user_id_)
-    user_dic = {id:index for index, id in enumerate(user_id_)}
+    # user= np.array([line[2] for line in question_answer_user_vote])
+    # user_id_ = np.unique(user)
+    # user_length = len(user_id_)
+    # user_dic = {id:index for index, id in enumerate(user_id_)}
 
 
     question = [line[0] for line in question_answer_user_vote]
@@ -30,9 +30,13 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
         if freq > 1:
             question_dic[id] = _index
             _index += 1
-        else:
-            continue
     question_count = len(question_dic)
+    assert question_count == _index, "[ERROR] Remove one answer question problem"
+
+    user = np.array([line[2] for line in question_answer_user_vote if line[0] in question_dic])
+    user_id_ = np.unique(user)
+    user_length = len(user_id_)
+    user_dic = {id: index for index, id in enumerate(user_id_)}
 
     answer = np.array([line[1] for line in question_answer_user_vote])
     answer_id = np.unique(answer)
@@ -42,7 +46,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     for line_index in range(len(question_answer_user_vote)):
         question = question_answer_user_vote[line_index][0]
         if question in question_dic:
-            question = question + user_length
+            question = question_dic[question] + user_length
             answer = answer_dic[question_answer_user_vote[line_index][1]] + user_length
             user = user_dic[question_answer_user_vote[line_index][2]]
             try:
@@ -51,11 +55,15 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
                 score = 0
             temp = [question, answer, user, score]
             remove_question_answer_user_vote.append(temp)
-        else:
-            continue
 
+
+    one_answer_question_user = 0
     for user_id, context in user_context.items():
-        user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context]
+        try:
+            user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context]
+        except:
+            one_answer_question_user += 1
+    print("[INFO] {} user onlt answer question with one answer".format(one_answer_question_user))
     post_dic =  {**question_dic, **answer_dic}
     post_dic = collections.OrderedDict(sorted(post_dic.items(), key=lambda x: x[1]))
     body_reorder = []
@@ -72,6 +80,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
         assert flag == index,"[ERROR] Content reorder problem"
         body_reorder.append(body_dic[id])
 
+    assert len(body_reorder) == len(post_dic), "[ERROR] Content length is not equal to answer + question"
     i = 0
     for id, index in question_dic.items():
         if id in accept_answer_dic:

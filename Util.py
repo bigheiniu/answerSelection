@@ -96,7 +96,7 @@ def tensorTonumpy(data, is_gpu):
     if is_gpu:
         return data.cpu().numpy()
     else:
-        return data.numpu()
+        return data.numpy()
 
 
 def train_test_split_len(question_count):

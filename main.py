@@ -322,7 +322,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     info_val = {}
 
     for epoch_i in range(args.epoch):
-        # train_epoch(model, train_data, optimizer, args, epoch_i)
+        train_epoch(model, train_data, optimizer, args, epoch_i)
 
         diversity_answer_recommendation, _ = eval_epoch(model, val_data, args, eval_epoch_count)
         diversity_answer_recommendation = [item - user_count for item in diversity_answer_recommendation]
@@ -333,7 +333,6 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
         print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
-        # print("[Info] Val Loss: {}, accuracy: {}".format(val_loss, accuracy_val))
 
         # test_loss, accuracy_test = eval_epoch(model, test_data, args, epoch_i)
         # print("[Info] Test Loss: {}, accuracy: {}".format(test_loss, accuracy_test))
@@ -352,7 +351,7 @@ def main():
     parser.add_argument("-log", default=None)
     # load data
     # parser.add_argument("-data",required=True)
-    parser.add_argument("-no_cuda", action="store_true")
+    parser.add_argument("-no_cuda", action="store_false")
     parser.add_argument("-lr", type=float, default=0.3)
 
     # induceive arguments

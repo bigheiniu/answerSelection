@@ -108,8 +108,8 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
             optimizer.zero_grad()
-            score_pos = model(question_list, answer_pos_list, user_pos_list)
-            score_neg = model(question_list, answer_neg_list, user_neg_list)
+            score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
+            score_neg = model(question_list, answer_neg_list, user_neg_list)[0]
             t = 0
             result = 0
             for i in count_list:
@@ -192,22 +192,27 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 temp = 0
                 feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
-                question_list.append(tensorTonumpy(q_val, args.gpu))
+                question_list.append(tensorTonumpy(q_val, args.cuda))
+                assert len(feature_matrix) == np.sum(count), "length not equall"
+
                 for i in count:
+                    feature_matrix_ = feature_matrix[temp:temp+i]
                     score_ = relevance_score[temp:temp+i]
+                    gt_val_ = gt_val[temp:temp+i]
+                    a_val_ = a_val[temp:temp+i]
+                    val_answer_list.append(a_val_)
                     sorted_index = np.argsort(-score_)
                     # ground truth sorted based on generated score order
-                    score_sorted = gt_val[sorted_index]
+                    score_sorted = gt_val_[sorted_index]
                     ndcg_loss += ndcg_at_k(score_sorted, args.ndcg_k)
-                    temp += i
                     query_count += 1
 
                     # coverage metric
                     # index -> [0-k]
-                    top_answer_index = diversity(feature_matrix, score_, sorted_index,
+                    top_answer_index = diversity(feature_matrix_, score_, sorted_index,
                                                        args.dpp_early_stop)
                     # id -> [10990, 12334, 1351]
-                    top_answer_id = tensorTonumpy(a_val[temp:temp + i][top_answer_index], args.cuda)
+                    top_answer_id = tensorTonumpy(a_val_, args.cuda)[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
 
@@ -253,13 +258,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
 
 
-def diversity_evaluation(diversity_answer_recommendation, background_list, content, topK, tfidf, lda):
+def diversity_evaluation(diversity_answer_recommendation, content, topK, tfidf, lda):
     #init evaluate class
-    background_data = []
-    for content_id in background_list:
-        background_data.append(content[content_id])
-    # tfidf = TFIDFSimilar(background_data, coverage_metric_model_pretrain, coverage_metric_model_path)
-    # lda = LDAsimilarity(background_data, coverage_metric_model_pretrain, coverage_metric_model_path, lda_topic)
     tf_idf_score = 0
     lda_score = 0
     question_count = len(diversity_answer_recommendation)
@@ -268,7 +268,7 @@ def diversity_evaluation(diversity_answer_recommendation, background_list, conte
         temp_tfidf_score = 0
         temp_lda_score = 0
         for answer in candidate_answer_list:
-            answer_content = content[answer]
+            answer_content = content[answer].tolist()
             candidate_word_space += answer_content
         for top_answer in candidate_answer_list[:topK]:
             top_answer_content = content[top_answer]
@@ -312,7 +312,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
     model = Model.InducieveLearningQA(args, user_count, adj, adj_edge, content, pre_trained_word2vec).to(args.device)
-    content_numpy = content.cpu().numpy() if args.cuda else content.cuda()
+    content_numpy = content.cpu().numpy() if args.cuda else content.numpy()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 
@@ -320,19 +320,17 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     tfidf = TFIDFSimilar(content_numpy, args.cov_pretrain, args.cov_model_path)
     lda = LDAsimilarity(content_numpy, args.lda_topic, args.cov_pretrain, args.cov_model_path)
     info_val = {}
-    if args.cuda:
-        _content = content.cpu().numpy()
-    else:
-        _content = content.numpy()
 
     for epoch_i in range(args.epoch):
-        train_epoch(model, train_data, optimizer, args, epoch_i)
+        # train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation, background_list = eval_epoch(model, val_data, args, eval_epoch_count)
-        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, background_list, content_numpy, args.div_topK, tfidf, lda)
+        diversity_answer_recommendation, _ = eval_epoch(model, val_data, args, eval_epoch_count)
+        diversity_answer_recommendation = [item - user_count for item in diversity_answer_recommendation]
+        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, content_numpy, args.div_topK, tfidf, lda)
 
         info_val['tfidf_cov'] = tfidf_cov
         info_val['lda_cov'] = lda_cov
+        print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
         # print("[Info] Val Loss: {}, accuracy: {}".format(val_loss, accuracy_val))
@@ -371,7 +369,7 @@ def main():
     parser.add_argument("-bidirectional", action="store_true")
     parser.add_argument("-class_kind", type=int, default=2)
     parser.add_argument("-embed_fileName",default="data/glove/glove.6B.100d.txt")
-    parser.add_argument("-batch_size", type=int, default=2)
+    parser.add_argument("-batch_size", type=int, default=10)
     parser.add_argument("-lstm_nulrm_layers", type=int, default=1)
     parser.add_argument("-drop_out_lstm", type=float, default=0.3)
     # conv parameter
@@ -387,7 +385,8 @@ def main():
     parser.add_argument('-div_topK', type=int, default=1)
     parser.add_argument('-lda_topic', type=int, default=20)
     parser.add_argument("-cov_pretrain", action="store_false")
-
+    parser.add_argument("-ndcg_k", type=int, default=2)
+    parser.add_argument("-dpp_early_stop", type=float, default=0.0001)
     args = parser.parse_args()
     #===========Load DataSet=============#
 

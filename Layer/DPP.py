@@ -7,10 +7,14 @@ from scipy import spatial
 
 
 def diversity(featureMatrix, relevanceScore, rankList, early_stop):
+
+    if type(rankList) is not list:
+        rankList = rankList.tolist()
+
     S = [rankList[0]]
     rankList.remove(S[0])
     L = Lmatrix(featureMatrix, relevanceScore)
-    while True:
+    while len(rankList) > 0:
         score = 0
         candidate = -1
         for i in rankList:
@@ -28,6 +32,8 @@ def diversity(featureMatrix, relevanceScore, rankList, early_stop):
         S.append(candidate)
         if(det(S,L) - det(oldS,L) <= early_stop):
             break
+    if len(rankList) != 0 :
+        S += rankList
     return S
 
 def Lmatrix(featureMatrix, relevanceScore):
@@ -36,7 +42,7 @@ def Lmatrix(featureMatrix, relevanceScore):
     for i in range(size_n):
         for j in range(size_n):
             L[i][j] = relevanceScore[i]*relevanceScore[j]*\
-                      (1 - spatial.distance.cosine(featureMatrix[i], featureMatrix[j]))
+                    (1 - spatial.distance.cosine(featureMatrix[i], featureMatrix[j]))
     return L
 
 def det(ids, L):

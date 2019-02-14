@@ -11,6 +11,7 @@ import itertools
 def my_clloect_fn_train(batch):
     # btach = list(zip(*batch))
     # return batch
+    batch = [item for item in batch if item[-1][0] > 0]
     question_list = torch.LongTensor(list(itertools.chain.from_iterable([item[0]for item in batch])))
     answer_pos_list = torch.LongTensor(list(itertools.chain.from_iterable([item[1] for item in batch])))
     user_pos_list = torch.LongTensor(list(itertools.chain.from_iterable([item[2] for item in batch])))
@@ -22,11 +23,12 @@ def my_clloect_fn_train(batch):
     return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list
 
 def my_collect_fn_test(batch):
+    batch = [item for item in batch if item[-1][0] > 0]
     question_list = torch.LongTensor(list(itertools.chain.from_iterable([item[0]for item in batch])))
     answer_list = torch.LongTensor(list(itertools.chain.from_iterable([item[1] for item in batch])))
     user_list = torch.LongTensor(list(itertools.chain.from_iterable([item[2] for item in batch])))
     score_list = torch.FloatTensor(list(itertools.chain.from_iterable([item[3] for item in batch])))
-    count_list = torch.IntTensor(list(itertools.chain.from_iterable([item[7] for item in batch])))
+    count_list = torch.IntTensor(list(itertools.chain.from_iterable([item[4] for item in batch])))
     return question_list, answer_list, user_list, score_list, count_list
 
 def classify_collect_fn(batch):
@@ -92,6 +94,11 @@ class rankDataSet(data.Dataset):
             score_pos = self.G[question][user_pos]['score']
             user_neg = self.random_negative(question, user_pos, score_pos)
 
+            #no body thums up
+            # question_list.append(question)
+            # answer_pos_list.append(answer_pos)
+            # user_pos_list.append(user_pos)
+            # score_pos_list.append(score_pos)
             if self.is_training:
                 if(user_neg == -1):
                     continue
@@ -102,7 +109,6 @@ class rankDataSet(data.Dataset):
                 user_neg_list.append(user_neg)
 
 
-
             question_list.append(question)
             answer_pos_list.append(answer_pos)
             user_pos_list.append(user_pos)
@@ -111,10 +117,6 @@ class rankDataSet(data.Dataset):
         if self.is_training:
             return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, [len(question_list)]
         else:
-            # index = np.argsort(-1 * np.array(score_pos_list))
-            # answer_pos_list = list(np.array(answer_pos_list)[index])
-            # user_pos_list = list(np.array(user_pos_list)[index])
-            # score_pos_list = list(np.array(score_pos_list)[index])
             return question_list, answer_pos_list, user_pos_list, score_pos_list, [len(question_list)]
 
 

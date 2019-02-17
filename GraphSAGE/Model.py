@@ -1,7 +1,7 @@
-from Layer.NeighSampler import UniformNeighborSampler
-from Layer.layer import *
+from GraphSAGE.NeighSampler import UniformNeighborSampler
+from GraphSAGE.layer import *
 from Util import *
-from Layer import DPP
+from GraphSAGE import DPP
 
 class InducieveLearningQA(nn.Module):
     def __init__(self, args,

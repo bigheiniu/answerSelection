@@ -14,9 +14,6 @@ def parse_post(xmlfile):
         post_id = int(row.attrib['Id'])
         if post_id in content_dic:
             continue
-
-
-
         post_type = row.attrib['PostTypeId']
         if post_type == '1':
             # question

@@ -2,10 +2,10 @@ import argparse
 from tqdm import tqdm
 #pytorch import
 from Util import  *
-from Layer.layer import PairWiseHingeLoss
-from Layer import layer, Model
+from GraphSAGE.layer import PairWiseHingeLoss
+from GraphSAGE import layer, Model
 from DataSet.dataset import clasifyDataSet, rankDataSet, my_clloect_fn_train, my_collect_fn_test, classify_collect_fn
-from Layer.DPP import *
+from GraphSAGE.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision_scikit, Accuracy, precision_at_k, mean_reciprocal_rank
 import itertools

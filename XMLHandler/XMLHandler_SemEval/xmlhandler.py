@@ -100,9 +100,8 @@ def idReorder(question_answer_user_label, content, user_context):
         question_answer_user_label[line_index][1] = answer_dic[answer[line_index]] + user_count
         question_answer_user_label[line_index][2] = user_dic[user[line_index]]
     for user_id, context in user_context.items():
-        user_context_reorder[user_dic[user_id]] = context
+        user_context_reorder[user_dic[user_id]] = [answer_dic[i] for i in context]
 
-    gc.collect()
     content_dic =  {**question_dic, **answer_dic}
     content_dic = collections.OrderedDict(sorted(content_dic.items(), key=lambda x: x[1]))
     content_reorder = []
@@ -112,7 +111,7 @@ def idReorder(question_answer_user_label, content, user_context):
         content_reorder.append(content[id])
 
 
-    return question_answer_user_label, content_reorder, user_context_reorder,user_count, question_count
+    return r, content_reorder, user_context_reorder,user_count, question_count
 
 
 

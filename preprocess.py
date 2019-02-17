@@ -2,7 +2,7 @@
 import argparse
 import torch
 # from XMLHandler.XMLHandler_SemEval import xmlhandler
-from Util import content_len_statics
+from Util import content_len_statics, plot_bar, graph_eval
 from XMLHandler.XMLHandler_StackOverflow import xmlhandler
 from TextClean import textClean
 import numpy as np
@@ -118,6 +118,11 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
     # print("[INFO] There are {} users, bigggest id is {}".format(len(set(user_list)), max(user_list)))
     return G
 
+def plot_G(G, user_count):
+    user, question = graph_eval(G, user_count)
+    plot_bar(user[0], user[1], "result/user_degree.pdf")
+    plot_bar(question[0], question[1],"result/question_degree.pdf")
+
 def main():
     ''' Main function '''
     parser = argparse.ArgumentParser()
@@ -167,7 +172,8 @@ def main():
 
     G = GenerateGraph(question_answer_user_vote, train_index, val_index)
 
-
+    # plot degree distribution of the graph
+    plot_G(G, user_count)
 
     data = {
         'settings': opt,

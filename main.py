@@ -2,9 +2,9 @@ import argparse
 from tqdm import tqdm
 #pytorch import
 from Util import  *
-from Layer.Layer import PairWiseHingeLoss
-from Layer import Layer, Model
-from DataSet.dataset import clasifyDataSet, rankDataSet
+from Layer.layer import PairWiseHingeLoss
+from Layer import layer, Model
+from DataSet.dataset import clasifyDataSet, rankDataSet, my_clloect_fn_train, my_collect_fn_test, classify_collect_fn
 from Layer.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision_scikit, Accuracy, precision_at_k, mean_reciprocal_rank
@@ -25,39 +25,63 @@ eval_epoch_count = 0
 
 def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
-
+    train_question, test_question = train_test_split_len(data['question_count'])
+    train_question += data['user_count']
+    test_question += data['user_count']
 
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
             clasifyDataSet(G=data['G'],
-                       user_count = data['user_count'],
-                       args=args,
-                       is_classification=args.is_classification
+                           args=args,
+                        question_list=train_question
                        ),
         num_workers=2,
         batch_size=args.batch_size,
-        shuffle=True)
+        collate_fn=classify_collect_fn,
+        shuffle=True
+        )
 
         val_loader = torch.utils.data.DataLoader(
         clasifyDataSet(
             G=data['G'],
-            user_count=data['user_count'],
             args=args,
-            is_classification=args.is_classification,
-            is_training=False
+            question_list=test_question
         ),
         num_workers=2,
         batch_size=args.batch_size,
+        collate_fn=classify_collect_fn,
         shuffle=True)
     else:
         train_loader = torch.utils.data.DataLoader(
             rankDataSet(
+                G=data['G'],
+                args=args,
+                question_id_list=train_question,
+                is_training=True,
 
             ),
-            num_wor
+            num_workers=1,
+            batch_size=args.batch_size,
+            shuffle=True,
+            collate_fn= my_clloect_fn_train
+        )
+
+        val_loader = torch.utils.data.DataLoader(
+            rankDataSet(
+                G=data['G'],
+                args=args,
+                question_id_list=train_question,
+                is_training=False,
+
+            ),
+            num_workers=1,
+            batch_size=args.batch_size,
+            shuffle=True,
+            collate_fn=my_collect_fn_test
 
         )
+
     return train_loader, val_loader
 
 
@@ -66,7 +90,7 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss()
-    loss_hinge = Layer.PairWiseHingeLoss(args.margin)
+    loss_hinge = layer.PairWiseHingeLoss(args.margin)
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
@@ -288,12 +312,13 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
     model = Model.InducieveLearningQA(args, user_count, adj, adj_edge, content, pre_trained_word2vec).to(args.device)
+    content_numpy = content.cpu().numpy() if args.cuda else content.cuda()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
 
     #load coverage model
-    tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
-    lda = LDAsimilarity(content, args.cov_pretrain, args.cov_model_path, args.lda_topic)
+    tfidf = TFIDFSimilar(content_numpy, args.cov_pretrain, args.cov_model_path)
+    lda = LDAsimilarity(content_numpy, args.lda_topic, args.cov_pretrain, args.cov_model_path)
     info_val = {}
     if args.cuda:
         _content = content.cpu().numpy()
@@ -304,7 +329,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
         diversity_answer_recommendation, background_list = eval_epoch(model, val_data, args, eval_epoch_count)
-        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, background_list, content, args.div_topK, tfidf, lda)
+        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, background_list, content_numpy, args.div_topK, tfidf, lda)
 
         info_val['tfidf_cov'] = tfidf_cov
         info_val['lda_cov'] = lda_cov
@@ -329,7 +354,7 @@ def main():
     parser.add_argument("-log", default=None)
     # load data
     # parser.add_argument("-data",required=True)
-    parser.add_argument("-no_cuda", action="store_false")
+    parser.add_argument("-no_cuda", action="store_true")
     parser.add_argument("-lr", type=float, default=0.3)
 
     # induceive arguments
@@ -346,7 +371,7 @@ def main():
     parser.add_argument("-bidirectional", action="store_true")
     parser.add_argument("-class_kind", type=int, default=2)
     parser.add_argument("-embed_fileName",default="data/glove/glove.6B.100d.txt")
-    parser.add_argument("-batch_size", type=int, default=64)
+    parser.add_argument("-batch_size", type=int, default=2)
     parser.add_argument("-lstm_nulrm_layers", type=int, default=1)
     parser.add_argument("-drop_out_lstm", type=float, default=0.3)
     # conv parameter
@@ -358,23 +383,27 @@ def main():
     parser.add_argument("-cov_model_path", default="result")
 
     #data for rank or classify
-    parser.add_argument("-is_classification", action='store_false')
-
+    parser.add_argument("-is_classification", action='store_true')
+    parser.add_argument('-div_topK', type=int, default=1)
+    parser.add_argument('-lda_topic', type=int, default=20)
+    parser.add_argument("-cov_pretrain", action="store_false")
 
     args = parser.parse_args()
     #===========Load DataSet=============#
 
 
     args.data="data/store_stackoverflow.torchpickle"
+    data = torch.load(args.data)
     #===========Prepare model============#
     args.cuda =  args.no_cuda
     args.device = torch.device('cuda' if args.cuda else 'cpu')
 
     print("cuda : {}".format(args.cuda))
-    args.DEBUG=False
+
+    args.DEBUG=True
     args.neighbor_number_list = [2,3]
     args.depth = len(args.neighbor_number_list)
-    data = torch.load(args.data)
+
     word2ix = data['dict']
     G = data['G']
     user_count = data['user_count']
@@ -387,7 +416,8 @@ def main():
                    "lstm_num_layers":[2,3,4],
                    "kernel_size":[3,4, 5],
                    "drop_out_lstm":[0.5],
-                    "lr":[1e-4, 1e-3, 1e-2]
+                    "lr":[1e-4, 1e-3, 1e-2],
+                    "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)
     args_dic = vars(args)

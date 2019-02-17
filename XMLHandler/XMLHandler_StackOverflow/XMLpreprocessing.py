@@ -35,7 +35,7 @@ def parse_post(xmlfile):
                 continue
             if user_id < 0:
                 continue
-
+            #ATTENTION: only store answer as user history data
             if user_id not in user_context:
                 user_context[user_id] = [post_id]
             else:

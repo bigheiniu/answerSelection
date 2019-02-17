@@ -96,8 +96,34 @@ def tensorTonumpy(data, is_gpu):
     if is_gpu:
         return data.cpu().numpy()
     else:
-        return data.numpu()
+        return data.numpy()
 
+
+def train_test_split_len(question_count):
+    question_list = list(range(question_count))
+    question_train_list, question_test_list = train_test_split(question_list, random_state=91)
+    return np.array(question_train_list), np.array(question_test_list)
+
+def graph_eval(G, user_count):
+    user_degree_list = sorted([d for n, d in G.degree() if n < user_count], reverse=True)
+    question_degree_list = sorted([d for n, d in G.degree() if n > user_count], reverse=True)
+    user_degree_count = collections.Counter(user_degree_list)
+    question_degree_count = collections.Counter(question_degree_list)
+    user_deg, user_cnt = zip(*user_degree_count.items())
+    question_deg, question_cnt = zip(*question_degree_count.items())
+
+    return (user_deg, user_cnt),(question_deg, question_cnt)
+
+def plot_bar(deg, cnt, figure_path):
+    fig, ax = plt.subplots()
+    plt.bar(deg, cnt, width=0.80, color='b')
+
+    plt.title("Degree Histogram")
+    plt.ylabel("Count")
+    plt.xlabel("Degree")
+    ax.set_xticks([d + 0.4 for d in deg])
+    ax.set_xticklabels(deg)
+    plt.savefig(figure_path, dpi=150)
 
 def train_test_split_len(question_count):
     question_list = list(range(question_count))

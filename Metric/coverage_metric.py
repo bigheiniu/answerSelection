@@ -27,16 +27,17 @@ import itertools
 
 
 class TFIDFSimilar:
-    def __init__(self, background_data, load_pretrain, model_path):
+    def __init__(self, background_data, load_pretrain, model_path ):
         file_name = "tfidf.model"
         model_path = os.path.join(model_path, file_name)
         if load_pretrain:
-
             self.tfModel = self.loadModel(model_path)
+            self.n_features = (1, self.tfModel.idf_.shape[0])
         else:
-            self.bc_vec = self.get_idf(background_data)
+            bc_vec = self.get_idf(background_data)
             self.tfModel = TfidfTransformer()
-            self.tfModel.fit(X=self.bc_vec)
+            self.tfModel.fit(X=bc_vec)
+            self.n_features = (1, self.tfModel.idf_.shape[0])
             self.saveModel(model_path)
 
     def get_idf(self, background_data):
@@ -49,13 +50,12 @@ class TFIDFSimilar:
         return base
 
     def simiarity(self, content, highRank):
-        content_vec = np.zeros_like(self.bc_vec)
-        highRank_vec = np.zeros_like(self.bc_vec)
-        print(content)
+        content_vec = np.zeros(self.n_features)
+        highRank_vec = np.zeros(self.n_features)
         for index in content:
-            content_vec[index] += 1
+            content_vec[0][index] += 1
         for index in highRank:
-            highRank_vec[index] += 1
+            highRank_vec[0][index] += 1
         i = self.tfModel.transform(content_vec)
         j = self.tfModel.transform(highRank_vec)
         cosine_similarities = linear_kernel(i,j).flatten()

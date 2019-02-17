@@ -159,13 +159,13 @@ class InducieveLearningQA(nn.Module):
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], question_neigbor_feature)
 
         #score edge strength
-        score = F.tanh(self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
+        score = torch.tanh(self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0]))
         if self.args.is_classification:
             score = F.log_softmax(self.w_final(score), dim=-1)
             predic = torch.argmax(score, dim=-1)
             return_list = [score, predic]
         else:
-            score = self.w_final(score)
+            score = self.w_final(score).view(-1,)
             return_list = [score]
         if need_feature:
             feature_matrix = self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]) + self.w_u(user_neighbors[0])

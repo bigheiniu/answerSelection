@@ -69,6 +69,7 @@ class config_model:
     #================
     #LSTM setting
     #================
+
     lstm_hidden_size = 128
     lstm_num_layers = 1
     drop_out_lstm = 0.3
@@ -90,7 +91,7 @@ class config_model:
     #coverage test model setting
     lda_topic = 20
     #whether the coverage test model is already trained or not
-    cov_pretrain = True
+    cov_pretrain = False
     # location to store or load model
     cov_model_path = "result"
 

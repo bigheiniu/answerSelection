@@ -110,10 +110,9 @@ def average_precision_scikit(y_true, y_score):
     return avg_sklearn(y_true, y_score)
 
 def mean_average_precision_scikit(y_true_list, y_score_list):
-    try:
-        result = [average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)]
-    except:
-        t = 10
+    result = np.array([average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)])
+    #WARNNING: remove nan
+    result = result[~np.isnan(result)]
     return np.mean(result)
 
 def average_precision(r):

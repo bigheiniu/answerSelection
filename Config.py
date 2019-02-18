@@ -33,9 +33,9 @@ class config_model:
     #basic setting
     epoch = 60
     log = None
-    batch_size = 34
+    batch_size = 8
     num_class = 2 if is_classification else 1
-    model_name = "CNTN"
+    model_name = "Hybrid"
     cuda = True
     device = torch.device('cuda' if cuda else 'cpu' )
     #path to store data
@@ -129,3 +129,10 @@ class config_model:
     #ARMNL smooth
     #==============
     follow_smooth = 0.1
+
+
+    #=============
+    #Hybrid Attention
+    #=============
+    hy_in_channels = 1
+

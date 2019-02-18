@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .Layer import UserGeneration, SelfAttention, HybridAttentionLayer,RatioLayer
+from HybridAttention.Layer import UserGeneration, SelfAttention, HybridAttentionLayer,RatioLayer
 from Visualization.logger import  Logger
 
 
@@ -35,7 +35,7 @@ class HybridAttentionModel(nn.Module):
         self.w_q = nn.Linear(self.args.lstm_hidden_size, self.args.lstm_hidden_size, bias=False)
         self.w_a = nn.Linear(self.args.lstm_hidden_size, self.args.lstm_hidden_size, bias=False)
         self.w_u = nn.Linear(self.args.lstm_hidden_size, self.args.lstm_hidden_size, bias=False)
-        self.w_final = nn.Linear(self.args.lstm_hidden_size, self.args.class_kind, bias=True)
+        self.w_final = nn.Linear(self.args.lstm_hidden_size, self.args.num_class, bias=True)
 
         nn.init.xavier_normal_(self.w_q.weight)
         nn.init.xavier_normal_(self.w_a.weight)
@@ -62,9 +62,9 @@ class HybridAttentionModel(nn.Module):
         :param user_context: N * L_document
         :return:
         '''
-        q_embed = self.word_embed(self.content_emebd.contetn_embed(question - self.user_count))
-        a_embed = self.word_embed(self.content_emebd.contetn_embed(answer - self.user_count))
-        u_embed = self.word_embed(self.content_emebd.contetn_embed(user_context - self.user_count))
+        q_embed = self.word_embed(self.content_embed.content_embed(question - self.user_count))
+        a_embed = self.word_embed(self.content_embed.content_embed(answer - self.user_count))
+        u_embed = self.word_embed(user_context)
 
         #WARNING: size of vector is not always have the same length
         #Reset question and answer question length
@@ -109,9 +109,15 @@ class HybridAttentionModel(nn.Module):
         # h_test = torch.tanh(q_lstm.mean(dim=-2) * a_lstm.mean(-2) * u_vec)
         # # batch * class
         #WARNING: check softmax dimention set
-        result = F.log_softmax(self.w_final(h), dim=-1)
-        _, predict = result.max(-1)
-        return_list = [result, predict]
+        score = self.w_final(h)
+        if self.args.is_classification:
+            score_log_softmax = F.log_softmax(score, dim=-1)
+            score_soft_max = F.softmax(score, dim=-1)
+            _, predict = score_soft_max.max(-1)
+            return_list = [score_log_softmax, score_soft_max, predict]
+        else:
+            return_list = [score]
+
         if need_feature:
             answer_vec = a_h_new.detach()
             return_list.append(answer_vec)

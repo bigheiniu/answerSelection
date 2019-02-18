@@ -46,12 +46,14 @@ class rankDataSet(data.Dataset):
                  args,
                  question_id_list,
                  user_context=None,
+                 content=None,
                  is_training=True
                  ):
         self.G = G
         self.args = args
         self.question_id_list = question_id_list
         self.user_context = user_context
+        self.content = content
         self.is_training = is_training
 
     def random_negative(self, questionId, userId, score):
@@ -104,7 +106,16 @@ class rankDataSet(data.Dataset):
             question_list.append(question)
             answer_pos_list.append(answer_pos)
             if self.user_context is not None:
-                user_pos_list.append(self.user_context[user_pos])
+                document = []
+                for post_id in self.user_context[user_pos]:
+                    document += self.content.content_embed(post_id)
+                    if len(document) > self.args.max_u_len:
+                        document = document[:self.args.max_u_len]
+                        break
+                if len(document) < self.args.max_u_len:
+                    pad_word = [Constants.PAD_WORD] * (self.args.max_u_len - len(document))
+                    document += pad_word
+                user_pos_list.append(document)
             else:
                 user_pos_list.append(user_pos)
             score_pos_list.append(score_pos)
@@ -122,12 +133,14 @@ class clasifyDataSet(data.Dataset):
                  G,
                  args,
                  question_list,
-                 user_context=None
+                 user_context=None,
+                 content=None
                  ):
         self.G = G
         self.args = args
         self.question_list = question_list
         self.user_context = user_context
+        self.content = content
 
 
 
@@ -145,10 +158,19 @@ class clasifyDataSet(data.Dataset):
             answer = self.G[question_id][user]['a_id']
             label = self.G[question_id][user]['score']
             question_list.append(question_id)
-            if self.user_context is None:
-                user_list.append(user)
+            if self.user_context is not None:
+                document = []
+                for post_id in self.user_context[user]:
+                    document += self.content.content_embed(post_id)
+                    if len(document) > self.args.max_u_len:
+                        document = document[:self.args.max_u_len]
+                        break
+                if len(document) < self.args.max_u_len:
+                    pad_word = [Constants.PAD_WORD] * (self.args.max_u_len - len(document))
+                    document += pad_word
+                user_list.append(document)
             else:
-                user_list.append(self.user_context[user])
+                user_list.append(user)
             answer_list.append(answer)
             label_list.append(label)
 

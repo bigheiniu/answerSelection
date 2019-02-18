@@ -28,11 +28,11 @@ class UserGeneration(nn.Module):
         self.args = args
         # different kernel size
 
-        self.conv1 = nn.Conv2d(self.args.in_channels, self.args.out_channels,
+        self.conv1 = nn.Conv2d(self.args.hy_in_channels, self.args.lstm_hidden_size,
         #first int is used for the height dimension, and the second int for the width dimension
-                               (self.args.kernel_size, self.args.embed_size))
+                               (3, self.args.embed_size))
         torch.nn.init.xavier_normal_(self.conv1.weight)
-        self.bn = nn.BatchNorm2d(self.args.out_channels)
+        self.bn = nn.BatchNorm2d(self.args.lstm_hidden_size)
 
         #feature map is a vector
 

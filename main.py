@@ -29,20 +29,21 @@ i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
 
-def prepare_dataloaders(data, args):
+def prepare_dataloaders(data, args, content_embed):
     # ========= Preparing DataLoader =========#
     train_question, test_question = train_test_split_len(data['question_count'])
     train_question += data['user_count']
     test_question += data['user_count']
-    user_context =  None
-
+    user_context = data['user_context']
+    content_embed = ContentEmbed(data['content'])
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
             clasifyDataSet(G=data['G'],
                            args=args,
                         question_list=train_question,
-                           user_context=user_context
+                           user_context=user_context,
+                           content=content_embed
                        ),
         num_workers=0,
         batch_size=args.batch_size,
@@ -55,7 +56,8 @@ def prepare_dataloaders(data, args):
             G=data['G'],
             args=args,
             question_list=test_question,
-            user_context=user_context
+            user_context=user_context,
+            content=content_embed,
         ),
         num_workers=0,
         batch_size=args.batch_size,
@@ -68,8 +70,8 @@ def prepare_dataloaders(data, args):
                 args=args,
                 question_id_list=train_question,
                 is_training=True,
-                user_context=user_context
-
+                user_context=user_context,
+                content = content_embed
             ),
             num_workers=0,
             batch_size=args.batch_size,
@@ -83,7 +85,8 @@ def prepare_dataloaders(data, args):
                 args=args,
                 question_id_list=train_question,
                 is_training=False,
-                user_context=user_context
+                user_context=user_context,
+                content=content_embed
 
             ),
             num_workers=0,
@@ -107,6 +110,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
     ):
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter, _ = map(lambda x: x.to(args.device), batch)
+            args.batch_size = q_iter.shape[0]
             optimizer.zero_grad()
             result = model(q_iter, a_iter, u_iter)[0]
             loss = loss_fn(result, gt_iter)
@@ -316,8 +320,7 @@ def grid_search(params_dic):
 
 
 
-def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, content, love_list_count, model_name):
-    content_embed = ContentEmbed(content)
+def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, content_embed, love_list_count, model_name):
     if model_name == "AMRNL":
         love_adj = ContentEmbed(torch.LongTensor(love_list_count[0]).to(args.device))
         love_len = ContentEmbed(torch.FloatTensor(love_list_count[1]).view(-1,1).to(args.device))
@@ -325,7 +328,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     elif model_name == "CNTN":
         model = CNTN_Model.CNTN(args, pre_trained_word2vec, content_embed, user_count)
     elif model_name == "Hybrid":
-        model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec, content_embed)
+        model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec, content_embed,user_count)
     elif model_name == "Graph":
         adj, adj_edge, _ = Adjance(G, args.max_degree)
         adj = adj.to(args.device)
@@ -334,8 +337,8 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     else:
         model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed)
 
-
-    content_numpy = content.cpu().numpy() if args.cuda else content.numpy()
+    print("Hello")
+    content_numpy = content_embed.content_list.cpu().numpy() if args.cuda else content_embed.content_list.numpy()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -382,12 +385,13 @@ def main():
     if args.is_classification is False:
         love_list_count = data['love_list_count']
     content = torch.LongTensor(data['content']).to(args.device)
-    train_data, val_data= prepare_dataloaders(data, args)
+    content_embed = ContentEmbed(content)
+    train_data, val_data= prepare_dataloaders(data, args, content_embed)
     pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
     model_name = args.model_name
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[32, 64, 128, 256, 512],
+    paragram_dic = {"lstm_hidden_size":[128, 256],
                    "lstm_num_layers":[1,2,3,4],
                    "drop_out_lstm":[0.5],
                     "lr":[1e-4, 1e-3, 1e-2],
@@ -398,6 +402,6 @@ def main():
         for key, value in paragram.items():
             print("Key: {}, Value: {}".format(key, value))
             setattr(args, key, value)
-        train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content, love_list_count, model_name)
+        train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_embed, love_list_count, model_name)
 if __name__ == '__main__':
     main()

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from Model import CNTN
 from Config import config_model
-from Utils import ContentEmbed
+from Util import ContentEmbed
 
 
 if __name__ == '__main__':

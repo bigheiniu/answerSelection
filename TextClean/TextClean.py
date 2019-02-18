@@ -2,6 +2,7 @@ import re
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem.snowball import SnowballStemmer
+from Constants import Constants
 
 
 stemmer = SnowballStemmer("english")
@@ -63,12 +64,3 @@ def cleanText(text):
 
     return stem_words
 
-#
-# def content_clean(content_list):
-#     # 1. change some word
-#     # 2. remove hashtag and other comma
-#     # 3. remove stopwords
-#     # 4. lemma
-#
-#     content_clean_word_list = [cleanText(setence) for setence in content_list]
-#     return content_clean_word_list

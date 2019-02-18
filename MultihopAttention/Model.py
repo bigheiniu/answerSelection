@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from MutihopAttention.Layer import *
-from Utils import ContentEmbed
+from MultihopAttention.Layer import *
+from Util import ContentEmbed
 
 
 class MultihopAttention(nn.Module):
@@ -29,7 +29,7 @@ class MultihopAttention(nn.Module):
 
         self.cosine = MultiCosimilarity()
 
-    def forward(self, question, answer):
+    def forward(self, question, answer,_):
         question_embed = self.word_embed(self.content_embed.content_embed(question))
         answer_embed = self.word_embed(self.content_embed.content_embed(answer))
 

@@ -8,8 +8,51 @@ from gensim.scripts.glove2word2vec import glove2word2vec
 from sklearn.model_selection import train_test_split
 import collections
 import matplotlib.pyplot as plt
+import logging
 
 
+class LSTM(nn.Module):
+    def __init__(self, args):
+        super(LSTM, self).__init__()
+        self.args = args
+        self.lstm = nn.LSTM(args.embed_size, args.lstm_hidden_size, batch_first=True,
+                            dropout=args.drop_out_lstm, num_layers=args.lstm_num_layers,bidirectional = args.bidirectional)
+
+    def lstm_init(self, batch_size):
+        h_0_size_1 = 1
+        if self.args.bidirectional:
+            h_0_size_1 *= 2
+        h_0_size_1 *= self.args.lstm_num_layers
+        hiddena = torch.zeros((h_0_size_1, batch_size, self.args.lstm_hidden_size),
+                              dtype=torch.float, device=self.args.device)
+        hiddenb = torch.zeros((h_0_size_1, batch_size, self.args.lstm_hidden_size),
+                              dtype=torch.float, device=self.args.device)
+        return hiddena, hiddenb
+
+    def forward(self, input):
+        shape = [*input.shape]
+        input = input.view(-1, shape[-2], shape[-1])
+        shape[-1] = 2 if self.args.bidirectional else 1
+        shape[-1] = shape[-1] * self.args.lstm_hidden_size
+        del shape[-2]
+        hiddena, hiddenb = self.lstm_init(input.shape[0])
+        output, _ = self.lstm(input, (hiddena, hiddenb))
+        output = torch.mean(output, dim = -2)
+        output = output.view(tuple(shape))
+        return output
+
+class ContentEmbed:
+    def __init__(self, content):
+        self.content = content
+
+    def content_embed(self, batch_id):
+        shape = [*batch_id.shape]
+        shape.append(len(self.content[0]))
+        shape = tuple(shape)
+        batch_id = batch_id.view(-1, )
+        content = self.content[batch_id]
+        content = content.view(shape)
+        return content
 
 
 
@@ -125,31 +168,14 @@ def plot_bar(deg, cnt, figure_path):
     ax.set_xticklabels(deg)
     plt.savefig(figure_path, dpi=150)
 
-def train_test_split_len(question_count):
-    question_list = list(range(question_count))
-    question_train_list, question_test_list = train_test_split(question_list, random_state=91)
-    return np.array(question_train_list), np.array(question_test_list)
-
-def graph_eval(G, user_count):
-    user_degree_list = sorted([d for n, d in G.degree() if n < user_count], reverse=True)
-    question_degree_list = sorted([d for n, d in G.degree() if n > user_count], reverse=True)
-    user_degree_count = collections.Counter(user_degree_list)
-    question_degree_count = collections.Counter(question_degree_list)
-    user_deg, user_cnt = zip(*user_degree_count.items())
-    question_deg, question_cnt = zip(*question_degree_count.items())
-
-    return (user_deg, user_cnt),(question_deg, question_cnt)
-
-def plot_bar(deg, cnt, figure_path):
-    fig, ax = plt.subplots()
-    plt.bar(deg, cnt, width=0.80, color='b')
-
-    plt.title("Degree Histogram")
-    plt.ylabel("Count")
-    plt.xlabel("Degree")
-    ax.set_xticks([d + 0.4 for d in deg])
-    ax.set_xticklabels(deg)
-    plt.savefig(figure_path, dpi=150)
-
+def createLogHandler(job_name,log_file):
+    logger = logging.getLogger(job_name)
+    ## create a file handler ##
+    handler = logging.FileHandler(log_file)
+    ## create a logging format ##
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
 
 

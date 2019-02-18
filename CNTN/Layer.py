@@ -11,7 +11,7 @@ def kmax_pooling(x, dim, k):
     # However our input data is batch * sequence_size * emebdding size
     # so what we should do is baed on emebding feature, choose particular document
     try:
-        x,_ =  torch.topk(x, k=k, dim=dim, sorted=False)
+        x,_ = torch.topk(x, k=k, dim=dim, sorted=False)
     except:
         print("[EROOR] max k is {}, shape of x {}".format(k, x.shape))
     return x

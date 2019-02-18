@@ -55,7 +55,9 @@ def parse_post(xmlfile):
 
 def parse_vote(xmlfile):
     vote_dic = {}
+    love_dic = {}
     tree = etree.parse(xmlfile)
+    anoymous_user = 0
     for row in tree.iterfind('row'):
         post_id = int(row.attrib['PostId'])
         vote_type_id = row.attrib['VoteTypeId']
@@ -64,7 +66,17 @@ def parse_vote(xmlfile):
                 vote_dic[post_id] += 1
             else:
                 vote_dic[post_id] = 1
-    return vote_dic
+        elif vote_type_id == '5':
+            try:
+                loving_user_id = int(row.attrib['UserId'])
+                if post_id in love_dic:
+                    love_dic[post_id].append(loving_user_id)
+                else:
+                    love_dic[post_id] = [loving_user_id]
+            except:
+                anoymous_user += 1
+    print("[INFO] {} user love other post on anouymous mode".format(anoymous_user))
+    return vote_dic, love_dic
 
 
 

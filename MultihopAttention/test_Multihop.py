@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from Config import config_model
-from Utils import ContentEmbed
+from Util import ContentEmbed
 from Model import MultihopAttention
 
 if __name__ == '__main__':

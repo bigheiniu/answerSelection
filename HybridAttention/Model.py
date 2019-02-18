@@ -1,24 +1,21 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from attention.Layers import UserGeneration, SelfAttention, HybridAttentionLayer,RatioLayer
-from attention.Utils import loadEmbed
-from visualization.logger import  Logger
+from .Layer import UserGeneration, SelfAttention, HybridAttentionLayer,RatioLayer
+from Visualization.logger import  Logger
 
-
-info = {}
-logger = Logger('./log')
 
 class HybridAttentionModel(nn.Module):
     '''
     word_embedding -> lstm -> self attention -> hybrid attention
     '''
-    def __init__(self, args, word2idx, pretrain_embed):
+    def __init__(self, args, pretrain_embed, content_embed, user_count):
         super(HybridAttentionModel, self).__init__()
         self.args = args
+        self.user_count = user_count
         self.embed_size = args.embed_size
         self.lstm_hidden_size = args.lstm_hidden_size
-        self.word2idx= word2idx
+        self.content_embed = content_embed
 
         self.word_embed = nn.Embedding.from_pretrained(pretrain_embed)
         # batch * max_len * embed_size
@@ -57,17 +54,17 @@ class HybridAttentionModel(nn.Module):
         return hiddena, hiddenb
 
 
-    def forward(self, question, answer, user, i_flag=None):
+    def forward(self, question, answer, user_context, need_feature=False):
         '''
 
         :param question: N * L_q
         :param answer: N * L_a
-        :param user: N * L_document
+        :param user_context: N * L_document
         :return:
         '''
-        q_embed = self.word_embed(question)
-        a_embed = self.word_embed(answer)
-        u_embed = self.word_embed(user)
+        q_embed = self.word_embed(self.content_emebd.contetn_embed(question - self.user_count))
+        a_embed = self.word_embed(self.content_emebd.contetn_embed(answer - self.user_count))
+        u_embed = self.word_embed(self.content_emebd.contetn_embed(user_context - self.user_count))
 
         #WARNING: size of vector is not always have the same length
         #Reset question and answer question length
@@ -110,15 +107,12 @@ class HybridAttentionModel(nn.Module):
         h = torch.tanh(self.w_q(q_h_new) + self.w_a(a_h_new) + self.w_u(u_h_new))
 
         # h_test = torch.tanh(q_lstm.mean(dim=-2) * a_lstm.mean(-2) * u_vec)
-        if i_flag is not None:
-            logger.histo_summary("q_alpha_atten", q_alpha_atten.cpu().detach().numpy(), i_flag)
-            logger.histo_summary("a_beta_atten", a_beta_atten.cpu().detach().numpy(), i_flag)
-            logger.histo_summary("q_beta_atten", q_beta_atten.cpu().detach().numpy(), i_flag)
-            logger.histo_summary("q_yi", q_yi.cpu().detach().numpy(), i_flag)
-            logger.histo_summary("a_yi", a_yi.cpu().detach().numpy(), i_flag)
-            logger.histo_summary("u_theta", u_theta.cpu().detach().numpy(), i_flag)
         # # batch * class
         #WARNING: check softmax dimention set
         result = F.log_softmax(self.w_final(h), dim=-1)
         _, predict = result.max(-1)
-        return result, predict
+        return_list = [result, predict]
+        if need_feature:
+            answer_vec = a_h_new.detach()
+            return_list.append(answer_vec)
+        return tuple(return_list)

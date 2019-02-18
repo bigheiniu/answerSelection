@@ -1,9 +1,9 @@
 import HybridAttention.Layer
 import HybridAttention.Model
-import Utils
+import Util
 
 __all__ = [
     Layer,
     Model,
-    Utils
+    Util
 ]

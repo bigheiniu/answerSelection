@@ -4,7 +4,6 @@ Define attention attention with bilstm layer
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from attention.Utils import loadEmbed
 
 __author__ = "Yichuan Li"
 

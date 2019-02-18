@@ -2,22 +2,66 @@
 
 
 
-from XMLHandler.XMLHandler_StackOverflow.XMLpreprocessing import parse_post, parse_vote
+from XMLHandler_StackOverflow.XMLpreprocessing import parse_post, parse_vote
 import os
-import  numpy as np
+import numpy as np
 import collections
-import gc
+from Config import config_data_preprocess
 
 
+def debugTest(list_line):
+    data = np.array(list_line)
+    max_question = np.max(data[:,0])
+    max_answer = np.max(data[:,1])
+    max_user = np.max(data[:,2])
+    length = len(list_line)
+    print("[INFO] max question id: {}\n max answer id: {} \n max user id: {}\n all length is {}".format(max_question, max_answer, max_user, length))
 
+
+def reorde_lover_dic(love_dic, user_dic, max_love_count, user_count):
+    love_list = []
+    user_dic_sorted = collections.OrderedDict(sorted(user_dic.items(), key=lambda x: x[1]))
+
+    for user_id, user_index in user_dic_sorted.items():
+        # assert user_index == len(love_list), "Love dic is wrong"
+        th = []
+        if user_id not in love_dic:
+            love_list.append(th)
+            continue
+        for love_user_id in love_dic[user_id]:
+            try:
+                love_user_index = user_dic[love_user_id]
+                th.append(love_user_index)
+            except:
+                pass
+        love_list.append(th)
+    love_count = [len(love_users) if len(love_users) < max_love_count else max_love_count for love_users in love_list ]
+    shrink_love_list = []
+    for love_users in love_list:
+        if len(love_users) > max_love_count:
+            th = love_users[:max_love_count]
+        else:
+            pad = [user_count] * (max_love_count - len(love_users))
+            th = love_users + pad
+
+        shrink_love_list.append(th)
+    return shrink_love_list, love_count
+
+# def love_list2sparse_matrx(love_list, dimention):
+#     value = []
+#     row = []
+#     col = []
+#     for index, love_users in enumerate(love_list):
+#         value_each = 1.0 / len(love_users)
+#         for love_user_index in love_users:
+#             row.append(index)
+#             col.append(love_user_index)
+#             value.append(value_each)
+#     return value,[row, col], dimention
 
 #quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
-def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context):
+def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context, love_dic, max_love_count=config_data_preprocess.max_love_count):
     user_context_reorder = {}
-    # user= np.array([line[2] for line in question_answer_user_vote])
-    # user_id_ = np.unique(user)
-    # user_length = len(user_id_)
-    # user_dic = {id:index for index, id in enumerate(user_id_)}
 
 
     question = [line[0] for line in question_answer_user_vote]
@@ -28,17 +72,17 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     question_dic = {}
     for id, freq in question_id_freq:
         if freq > 1:
+            assert id not in question_dic, "question unique function is not right"
             question_dic[id] = _index
             _index += 1
-    question_count = len(question_dic)
-    assert question_count == _index, "[ERROR] Remove one answer question problem"
+    question_count = _index
 
     user = np.array([line[2] for line in question_answer_user_vote if line[0] in question_dic])
     user_id_ = np.unique(user)
     user_length = len(user_id_)
     user_dic = {id: index for index, id in enumerate(user_id_)}
 
-    answer = np.array([line[1] for line in question_answer_user_vote])
+    answer = np.array([line[1] for line in question_answer_user_vote if line[0] in question_dic])
     answer_id = np.unique(answer)
     answer_dic = {id: index + question_count for index, id in enumerate(answer_id)}
 
@@ -63,9 +107,9 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
             user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context]
         except:
             one_answer_question_user += 1
-    print("[INFO] {} user onlt answer question with one answer".format(one_answer_question_user))
+    print("[INFO] {} user only answer question with one answer".format(one_answer_question_user))
     post_dic =  {**question_dic, **answer_dic}
-    post_dic = collections.OrderedDict(sorted(post_dic.items(), key=lambda x: x[1]))
+    post_dic_sort = collections.OrderedDict(sorted(post_dic.items(), key=lambda x: x[1]))
     body_reorder = []
 
     question_dic_sort = collections.OrderedDict(sorted(question_dic.items(), key=lambda x:x[1]))
@@ -76,7 +120,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
         assert flag == index, "[ERROR] Title reorder problem"
         title_reorder.append(title_dic[id])
 
-    for flag, (id, index) in enumerate(post_dic.items()):
+    for flag, (id, index) in enumerate(post_dic_sort.items()):
         assert flag == index,"[ERROR] Content reorder problem"
         body_reorder.append(body_dic[id])
 
@@ -93,7 +137,16 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
                 continue
     print("[INFO] No accepted answer, question count {}".format(i))
 
-    return remove_question_answer_user_vote, body_reorder, user_context_reorder, accept_answer_dic_reorder, title_reorder, user_length, question_count
+
+
+    # love_list reorder
+    love_list_count = reorde_lover_dic(love_dic=love_dic, user_dic=user_dic, user_count=user_length, max_love_count=max_love_count)
+    # sparse_matrix_format = love_list2sparse_matrx(love_list, (user_length, user_length))
+
+
+
+    return remove_question_answer_user_vote, body_reorder, user_context_reorder, accept_answer_dic_reorder, title_reorder, user_length, question_count, love_list_count
+
 
 
 
@@ -108,7 +161,7 @@ def read_xml_data(path):
     vote_file = os.path.join(path, "Votes.xml")
     quesition_answer_user_dic, body_dic, title_dic, accept_answer_dic, user_context = parse_post(post_file)
 
-    vote_dic = parse_vote(vote_file)
+    vote_dic, love_dic = parse_vote(vote_file)
 
 
     for post_id, vote_count in vote_dic.items():
@@ -120,9 +173,11 @@ def read_xml_data(path):
     quesition_answer_user_vote = list(quesition_answer_user_dic.values())
 
     return quesition_answer_user_vote, body_dic, \
-           title_dic, accept_answer_dic, user_context
+           title_dic, accept_answer_dic, user_context, love_dic
+
+
 
 
 def main(path):
-    question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count = idReorder(*(read_xml_data(path)))
-    return question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count
+    question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count = idReorder(*(read_xml_data(path)))
+    return question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count,love_list_count

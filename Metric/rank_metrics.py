@@ -11,7 +11,7 @@ Learning to Rank for Information Retrieval (Tie-Yan Liu)
 # raw url: https://gist.github.com/bwhite/3726239
 # raw url: https://blog.csdn.net/lujiandong1/article/details/77123805
 import numpy as np
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score as avg_sklearn
 
 
 def mean_reciprocal_rank(rs):
@@ -107,10 +107,13 @@ def precision_at_k(r_list, k):
 
 
 def average_precision_scikit(y_true, y_score):
-    return mean_average_precision(y_true, y_score)
+    return avg_sklearn(y_true, y_score)
 
 def mean_average_precision_scikit(y_true_list, y_score_list):
-    result = [mean_average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)]
+    try:
+        result = [average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)]
+    except:
+        t = 10
     return np.mean(result)
 
 def average_precision(r):

@@ -1,4 +1,4 @@
-from XMLHandler.XMLHandler_SemEval import xmlhandler
+from XMLHandler_SemEval import xmlhandler
 from scipy import stats
 
 if __name__ == '__main__':

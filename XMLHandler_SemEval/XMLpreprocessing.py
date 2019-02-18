@@ -1,7 +1,6 @@
 """This module provides preprocessing routines for SemEval Task 3, Subtask B datasets."""
 
 from lxml import etree
-import re
 
 def parse(xmlfile, content_id, user_dic, user_context):
     tree = etree.parse(xmlfile)

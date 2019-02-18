@@ -3,11 +3,15 @@ import argparse
 import torch
 # from XMLHandler.XMLHandler_SemEval import xmlhandler
 from Util import content_len_statics, plot_bar, graph_eval
-from XMLHandler.XMLHandler_StackOverflow import xmlhandler
-from TextClean import textClean
+from TextClean import TextClean
 import numpy as np
 import networkx as nx
 from Constants import Constants
+from Config import config_data_preprocess
+from Util import createLogHandler
+from XMLHandler_StackOverflow import xmlhandler as stack_xmlhandler
+from XMLHandler_SemEval import xmlhandler as sem_xmlhandler
+
 
 def shrink_clean_text(content, max_sent_len):
     ''' Convert file into word seq lists and vocab
@@ -20,7 +24,7 @@ def shrink_clean_text(content, max_sent_len):
     j = 0
     for sent in content:
         i += 1
-        words = textClean.cleanText(sent)
+        words = TextClean.cleanText(sent)
         if len(words) > max_sent_len:
             trimmed_sent_count += 1
         elif len(words) < max_sent_len:
@@ -125,78 +129,65 @@ def plot_G(G, user_count):
 
 def main():
     ''' Main function '''
-    parser = argparse.ArgumentParser()
-    # add by yichuan li
-    parser.add_argument('-raw_data',default="/home/yichuan/course/data")
-
-
-
-    parser.add_argument('-max_len', '--max_word_seq_len', type=int, default=60)
-    parser.add_argument('-min_word_count', type=int, default=5)
-    parser.add_argument('-keep_case', action='store_true')
-
-    parser.add_argument('-share_vocab', action='store_true')
-    parser.add_argument('-vocab', default=None)
-    parser.add_argument('-train_size', default=0.6)
-    parser.add_argument('-val_size', default=0.4)
-    parser.add_argument('-test_size', default=0.0)
-
-    opt = parser.parse_args()
-    question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count = xmlhandler.main(opt.raw_data)
-
-    content_word_list = shrink_clean_text(body, opt.max_word_seq_len)
-    title_world_list = shrink_clean_text(title, opt.max_word_seq_len)
+    config = config_data_preprocess
+    logger = createLogHandler(config.logger_name, config.log_file)
+    title_world_list = []
+    if config.is_classification is False:
+        question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count=stack_xmlhandler.main(config.raw_data)
+        title_world_list = shrink_clean_text(title, config.max_len)
+    else:
+        question_answer_user_vote, body, user_context, user_count, question_count = sem_xmlhandler.main(config.raw_data)
+    content_word_list = shrink_clean_text(body, config.max_len)
     question_answer_user_vote = np.array(question_answer_user_vote)
 
     # Build vocabulary
-    word2idx = build_vocab_idx(content_word_list + title_world_list, opt.min_word_count)
+    word2idx = build_vocab_idx(content_word_list + title_world_list, config.min_word_count)
     # word to index
     print('[DEBUG] Convert  word instances into sequences of word index.')
-    title_id = convert_instance_to_idx_seq(title_world_list, word2idx)
-    word_id = convert_instance_to_idx_seq(content_word_list, word2idx)
+    if config.is_classification is False:
+        title_id = convert_instance_to_idx_seq(title_world_list, word2idx)
+        info_title = convert_instance_to_idx_seq(title_id, word2idx)
+        logger.info('Title length information: {}'.format(info_title))
 
+    word_id = convert_instance_to_idx_seq(content_word_list, word2idx)
     info_content = content_len_statics(word_id)
-    info_title = content_len_statics(title_id)
-    print('[INFO] content length infomation: {}'.format(info_content))
-    print('[INFO] title length information: {}'.format(info_title))
+    logger.info('Content length infomation: {}'.format(info_content))
     #split train-valid-test dataset
 
     index = np.arange(len(question_answer_user_vote))
     np.random.shuffle(index)
     length = len(question_answer_user_vote)
-    train_end = int(opt.train_size * length)
-    val_end = int(opt.val_size * length) + train_end
+    train_end = int(config.train_size * length)
     train_index = index[:train_end]
-    val_index = index[train_end: val_end]
-    test_index = index[val_end:]
+    test_index = index[train_end:]
 
-    G = GenerateGraph(question_answer_user_vote, train_index, val_index)
+    G = GenerateGraph(question_answer_user_vote, train_index, test_index)
 
     # plot degree distribution of the graph
     plot_G(G, user_count)
 
     data = {
-        'settings': opt,
+        'settings': config,
         'dict': word2idx,
         'content': word_id,
-        'title': title_id,
         'question_answer_user_train': question_answer_user_vote[train_index],
-        'question_answer_user_val': question_answer_user_vote[val_index],
         'question_answer_user_test': question_answer_user_vote[test_index],
         'G': G,
         'user_count': user_count,
         'question_count': question_count,
-        'user':user_context
+        'user_context':user_context
     }
-
-    opt.save_data="data/store_stackoverflow.torchpickle"
-    print('[Info] Dumping the processed data to pickle file', opt.save_data)
-    torch.save(data, opt.save_data)
-    print('[Info] Finish.')
-
-
-
+    if config.is_classification is not True:
+        data["title"] = title_id
+        data["love_list_count"] = love_list_count
+        config.save_data="data/store_stackoverflow.torchpickle"
+    else:
+        config.save_data="data/store_SemEval.torchpickle"
+    logger.info("Dumping the processed data to pickle file: {}".format(config.save_data))
+    torch.save(data, config.save_data)
+    logger.info("Finish text extraction, storing")
 
 
 if __name__ == '__main__':
+    # store logger information
     main()

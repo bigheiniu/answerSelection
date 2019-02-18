@@ -2,11 +2,10 @@
 
 
 
-from XMLHandler.XMLHandler_SemEval.XMLpreprocessing import parse
+from XMLHandler_SemEval.XMLpreprocessing import parse
 import os
 import  numpy as np
 import collections
-import gc
 
 
 def convert_content_id(data):
@@ -111,7 +110,7 @@ def idReorder(question_answer_user_label, content, user_context):
         content_reorder.append(content[id])
 
 
-    return r, content_reorder, user_context_reorder,user_count, question_count
+    return question_answer_user_label, content_reorder, user_context_reorder, user_count, question_count
 
 
 
@@ -142,4 +141,4 @@ def read_xml_data(path):
 def main(path):
     content, question_answer_user_label, user_context = read_xml_data(path)
     question_answer_user_label, content, user_context, user_count, question_count= idReorder(question_answer_user_label, content, user_context)
-    return content,  question_answer_user_label, user_context, user_count, question_count
+    return  question_answer_user_label, content, user_context, user_count, question_count

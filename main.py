@@ -241,7 +241,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         true_label_flatt = list(itertools.chain.from_iterable(true_label))
         score_list_flatt = list(itertools.chain.from_iterable(pred_score))
 
-        accuracy, zero_count, one_count = Accuracy(pred_label_flatt, true_label_flatt)
+        accuracy, zero_count, one_count = Accuracy(true_label_flatt, pred_label_flatt)
         mAP = mean_average_precision_scikit(true_label, pred_score)
         pat1 = precision_at_k(label_score_order, 1)
         mpr = mean_reciprocal_rank(label_score_order)

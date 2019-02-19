@@ -337,7 +337,6 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     else:
         model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed)
 
-    print("Hello")
     content_numpy = content_embed.content_list.cpu().numpy() if args.cuda else content_embed.content_list.numpy()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 

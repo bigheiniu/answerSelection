@@ -5,13 +5,13 @@ from Util import ContentEmbed
 
 
 class MultihopAttention(nn.Module):
-    def __init__(self, args, word2vec_pretrained, content_embed:ContentEmbed):
+    def __init__(self, args, word2vec_pretrained, content_embed: ContentEmbed, user_count):
         super(MultihopAttention, self).__init__()
         self.args = args
         self.embed_size = args.embed_size
         self.lstm_hidden_size = args.lstm_hidden_size
         self.content_embed = content_embed
-
+        self.user_count = user_count
         self.word_embed = nn.Embedding.from_pretrained(word2vec_pretrained)
         # batch * max_len * embed_size
         self.lstm = LSTM(self.args)
@@ -29,9 +29,9 @@ class MultihopAttention(nn.Module):
 
         self.cosine = MultiCosimilarity()
 
-    def forward(self, question, answer,_):
-        question_embed = self.word_embed(self.content_embed.content_embed(question))
-        answer_embed = self.word_embed(self.content_embed.content_embed(answer))
+    def forward(self, question, answer, _):
+        question_embed = self.word_embed(self.content_embed.content_embed(question- self.user_count))
+        answer_embed = self.word_embed(self.content_embed.content_embed(answer - self.user_count))
 
         lstm_list_question = self.lstm(question_embed)
         lstm_list_answer = self.lstm(answer_embed)

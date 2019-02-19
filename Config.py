@@ -23,7 +23,7 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = False
+    DEBUG = True
     is_classification = True
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
@@ -35,12 +35,12 @@ class config_model:
     log = None
     batch_size = 8
     num_class = 2 if is_classification else 1
-    model_name = "Hybrid"
+    model_name = "Graph"
     cuda = True
     device = torch.device('cuda' if cuda else 'cpu' )
     #path to store data
-    data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
-
+    # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    data = "data/store_SemEval.torchpickle"
     #=====================
     #content_data setting
     #====================
@@ -91,7 +91,7 @@ class config_model:
     #coverage test model setting
     lda_topic = 20
     #whether the coverage test model is already trained or not
-    cov_pretrain = False
+    cov_pretrain = True
     # location to store or load model
     cov_model_path = "result"
 

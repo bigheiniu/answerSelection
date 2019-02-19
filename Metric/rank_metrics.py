@@ -11,8 +11,8 @@ Learning to Rank for Information Retrieval (Tie-Yan Liu)
 # raw url: https://gist.github.com/bwhite/3726239
 # raw url: https://blog.csdn.net/lujiandong1/article/details/77123805
 import numpy as np
-from sklearn.metrics import average_precision_score as avg_sklearn
-
+# from sklearn.metrics import average_precision_score as avg_sklearn
+from scipy.stats import rankdata
 
 def mean_reciprocal_rank(rs):
     """Score is reciprocal of the rank of the first relevant item
@@ -106,40 +106,110 @@ def precision_at_k(r_list, k):
 
 
 
-def average_precision_scikit(y_true, y_score):
-    return avg_sklearn(y_true, y_score)
+# def average_precision_scikit(y_true, y_score):
+#     return avg_sklearn(y_true, y_score)
+#
+# def mean_average_precision_scikit(y_true_list, y_score_list):
+#     result = np.array([average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)])
+#     #WARNNING: remove nan
+#     result = result[~np.isnan(result)]
+#     return np.mean(result)
 
-def mean_average_precision_scikit(y_true_list, y_score_list):
-    result = np.array([average_precision_scikit(y_true, y_score) for y_true, y_score in zip(y_true_list, y_score_list)])
-    #WARNNING: remove nan
-    result = result[~np.isnan(result)]
-    return np.mean(result)
+
+
+
+def average_precision_rank_score(label, rank_score):
+    """
+    Pay attention to the rank score order
+    >>> r = [1, 0, 1, 0, 1]
+    >>> score = [0.12, 0.15, 0.17]
+    >>> index = np.argmax(score)
+    >>> sorted_score = np.sort(score)
+    :param r:
+    :return:
+    """
+    rank_order = rankdata(rank_score)
+    rank_order = [int(i) for i in rank_order]
+    ap = 0
+    for index, j in enumerate(rank_order):
+        p_j = 0
+        for i in range(j):
+            p_j += label[rank_order[i] - 1]
+        try:
+            p_j = p_j * 1.0 / j * label[rank_order[j] - 1]
+        except:
+            print("hello")
+        ap += p_j
+    if np.sum(label) == 0:
+        ap = 0
+    else:
+        ap = ap / np.sum(label)
+    return ap
+
+
+
+# def average_precision(label, rank_score):
+#     """Score is average precision (area under PR curve)
+#
+#     Relevance is binary (nonzero is relevant).
+#
+#     >>> r = [1, 1, 0, 1, 0, 1, 0, 0, 0, 1]
+#     >>> delta_r = 1. / sum(r)
+#     >>> sum([sum(r[:x + 1]) / (x + 1.) * delta_r for x, y in enumerate(r) if y])
+#     0.7833333333333333
+#     >>> average_precision(r)
+#     0.78333333333333333
+#
+#     Args:
+#         r: Relevance scores (list or numpy) in rank order
+#             (first element is the first item)
+#
+#     Returns:
+#         Average precision
+#     """
+#     rank_score = np.asarray(rank_score)
+#     label = np.array(label)
+#     out = average_precision_rank_score(label, rank_score)
+#     return out
+
+
+# def mean_average_precision_yichuan(label_list, rank_score_list):
+#     """Score is mean average precision
+#     Relevance is binary (nonzero is relevant).
+#     >>> rs = [[1, 1, 0, 1, 0, 1, 0, 0, 0, 1]]
+#     >>> mean_average_precision(rs)
+#     0.78333333333333333
+#     >>> rs = [[1, 1, 0, 1, 0, 1, 0, 0, 0, 1], [0]]
+#     >>> mean_average_precision(rs)
+#     0.39166666666666666
+#     Args:
+#         rs: Iterator of relevance scores (list or numpy) in rank order
+#             (first element is the first item)
+#     Returns:
+#         Mean average precision
+#     """
+#     return np.mean([average_precision(label, rank_score) for label, rank_score in zip(label_list, rank_score_list)])
 
 def average_precision(r):
     """Score is average precision (area under PR curve)
-
     Relevance is binary (nonzero is relevant).
-
     >>> r = [1, 1, 0, 1, 0, 1, 0, 0, 0, 1]
     >>> delta_r = 1. / sum(r)
     >>> sum([sum(r[:x + 1]) / (x + 1.) * delta_r for x, y in enumerate(r) if y])
     0.7833333333333333
     >>> average_precision(r)
     0.78333333333333333
-
     Args:
         r: Relevance scores (list or numpy) in rank order
             (first element is the first item)
-
     Returns:
         Average precision
     """
     r = np.asarray(r) != 0
-    out = [precision_at_k(r, k + 1) for k in range(r.size) if r[k]]
+    out = [precision_at_k([r], k + 1) for k in range(r.size) if r[k]]
     if not out:
         return 0.
     return np.mean(out)
-
 
 def mean_average_precision(rs):
     """Score is mean average precision
@@ -157,6 +227,7 @@ def mean_average_precision(rs):
         Mean average precision
     """
     return np.mean([average_precision(r) for r in rs])
+
 
 
 

@@ -12,8 +12,7 @@ from CNTN import Model as CNTN_Model
 from DataSet.dataset import clasifyDataSet, rankDataSet, my_clloect_fn_train, my_collect_fn_test, classify_collect_fn
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, mean_average_precision_scikit, Accuracy, precision_at_k, mean_reciprocal_rank
-import itertools
+from Metric.rank_metrics import ndcg_at_k, mean_average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
 from Config import config_model
 
 
@@ -34,8 +33,8 @@ def prepare_dataloaders(data, args, content_embed):
     train_question, test_question = train_test_split_len(data['question_count'])
     train_question += data['user_count']
     test_question += data['user_count']
-    user_context = data['user_context']
-    content_embed = ContentEmbed(data['content'])
+    user_context = None
+    content_embed = None
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
@@ -121,8 +120,8 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
             optimizer.zero_grad()
-            score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
-            score_neg = model(question_list, answer_neg_list, user_neg_list)[0]
+            score_pos = model(question_list, answer_pos_list, user_pos_list)
+            score_neg = model(question_list, answer_neg_list, user_neg_list)
             t = 0
             result = 0
             for i in count_list:
@@ -155,7 +154,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     val_answer_list = []
     question_list = []
     info_test = {}
-    loss_fn = nn.NLLLoss()
+    loss_fn = nn.NLLLoss() if args.is_classification else Inducive_Layer.PairWiseHingeLoss(args.margin)
     loss = 0
     ndcg_loss = 0
     query_count = 0
@@ -163,76 +162,86 @@ def eval_epoch(model, data, args, eval_epoch_count):
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
+
             if args.is_classification:
                 q_val, a_val, u_val, gt_val, count = map(lambda x: x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
-                result, score, predict, feature_matrix = model(q_val, a_val, u_val, True)
-                loss += loss_fn(result, gt_val)
-                pred_label.append(tensorTonumpy(predict, args.cuda))
-                true_label.append(tensorTonumpy(gt_val, args.cuda))
+                score, prediction  = model(q_val, a_val, u_val, False)
+                loss += loss_fn(score, gt_val)
+
+                # pred_label.append(tensorTonumpy(predict, args.cuda))
+                gt_val = tensorTonumpy(gt_val, args.cuda)
+                pred_label.append(tensorTonumpy(prediction, args.cuda))
 
                 count = tensorTonumpy(count, args.cuda)
-                relevance_score = tensorTonumpy(score[:,1], args.cuda)
-                feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
+                relevance_score = tensorTonumpy(score, args.cuda)
+                # feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
                 pred_score.append(relevance_score)
                 temp = 0
                 question_list.append(tensorTonumpy(q_val, args.cuda))
-
+                a_val = tensorTonumpy(a_val,args.cuda)
                 for i in count:
-                    score_ = relevance_score[temp:temp + i]
-                    feature_matrix_ = feature_matrix[temp:temp+i]
+                    score_slice = relevance_score[temp:temp + i,1]
+                    label_slice = gt_val[temp:temp+i]
+                    # feature_matrix_ = feature_matrix[temp:temp+i]
                     #label order based on predicted score
-                    label = true_label[-1][temp:temp+i]
-                    sorted_index = np.argsort(-score_)
-                    label = label[sorted_index]
-                    label_score_order.append(label)
+                    true_label.append(label_slice)
+                    sorted_index = np.argsort(-score_slice)
+                    label_slice_order = label_slice[sorted_index]
+                    label_score_order.append(label_slice_order)
 
                     #coverage metric
                     #index -> [0-k]
-                    if args.use_dpp:
-                        top_answer_index = diversity(feature_matrix_, score_, sorted_index, args.dpp_early_stop)
-                    else:
-                        top_answer_index = list(range(i))
+                    # if args.use_dpp:
+                    #     top_answer_index = diversity(feature_matrix_, score_, sorted_index, args.dpp_early_stop)
+                    # else:
+                    top_answer_index = list(range(1))
                     #id -> [10990, 12334, 1351]
-                    top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
-                    val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
+
+                    try:
+                        top_answer_id = a_val[temp:temp+i][top_answer_index]
+                    except:
+                        t = 10
+                    val_answer = a_val[temp:temp+i]
                     val_answer_list.append(val_answer)
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
             else:
                 q_val, a_val, u_val, gt_val, count = map(lambda x:x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
-                relevance_score, feature_matrix = model(q_val, a_val, u_val, True)
+                relevance_score = model(q_val, a_val, u_val)
                 count = tensorTonumpy(count, args.cuda)
                 relevance_score = tensorTonumpy(relevance_score, args.cuda)
                 temp = 0
-                feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
+                # feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_list.append(tensorTonumpy(q_val, args.cuda))
                 a_val = tensorTonumpy(a_val, args.cuda)
-                assert len(feature_matrix) == np.sum(count), "length not equall"
+                # assert len(feature_matrix) == np.sum(count), "length not equall"
 
                 for i in count:
                     # diversity order => problem
-                    feature_matrix_ = feature_matrix[temp:temp+i]
-                    score_ = relevance_score[temp:temp+i].reshape(-1,)
-                    gt_val_ = gt_val[temp:temp+i]
+                    # feature_matrix_ = feature_matrix[temp:temp+i]
+                    score_slice = relevance_score[temp:temp+i]
+                    gt_val_slice = gt_val[temp:temp+i]
+
                     a_val_ = a_val[temp:temp+i]
                     val_answer_list.append(a_val_)
-                    sorted_index = np.argsort(-score_)
-                    t = score_[sorted_index]
+                    true_label.append(gt_val[temp:temp+i])
+                    sorted_index = np.argsort(-score_slice)
                     # ground truth sorted based on generated score order
-                    score_sorted = gt_val_[sorted_index]
-                    ndcg_loss += ndcg_at_k(score_sorted, args.ndcg_k)
+                    label_sorted = gt_val_slice[sorted_index]
+                    label_score_order.append(label_sorted)
+                    ndcg_loss += ndcg_at_k(label_sorted, args.ndcg_k)
                     query_count += 1
 
                     # coverage metric
                     # index -> [0-k]
-                    if args.use_dpp:
-                        top_answer_index = diversity(feature_matrix_, score_, sorted_index,
-                                                       args.dpp_early_stop)
-                    else:
-                        top_answer_index = list(range(i))
+                    # if args.use_dpp:
+                    #     top_answer_index = diversity(feature_matrix_, score_, sorted_index,
+                    #                                    args.dpp_early_stop)
+                    # else:
+                    top_answer_index = list(range(i))
                     # id -> [10990, 12334, 1351]
                     top_answer_id = a_val_[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)
@@ -243,10 +252,10 @@ def eval_epoch(model, data, args, eval_epoch_count):
     if args.is_classification:
         pred_label_flatt = list(itertools.chain.from_iterable(pred_label))
         true_label_flatt = list(itertools.chain.from_iterable(true_label))
-        score_list_flatt = list(itertools.chain.from_iterable(pred_score))
+        # score_list_flatt = list(itertools.chain.from_iterable(pred_score))
 
         accuracy, zero_count, one_count = Accuracy(true_label_flatt, pred_label_flatt)
-        mAP = mean_average_precision_scikit(true_label, pred_score)
+        mAP = mean_average_precision(label_score_order)
         pat1 = precision_at_k(label_score_order, 1)
         mpr = mean_reciprocal_rank(label_score_order)
 
@@ -263,9 +272,10 @@ def eval_epoch(model, data, args, eval_epoch_count):
         print("[Info] mAP: {}".format(mAP))
         eval_epoch_count += 1
     else:
+        mAP =  mean_average_precision(label_score_order)
         mean_ndcgg = ndcg_loss * 1.0 / query_count
         info_test['nDCGG'] = mean_ndcgg
-        print("[INFO] Ranking Porblem nDCGG: {}".format(mean_ndcgg))
+        print("[INFO] Ranking Porblem nDCGG: {}, mAP is {}".format(mean_ndcgg, mAP))
 
     #coverage metric
 
@@ -335,9 +345,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
         adj_edge = adj_edge.to(args.device)
         model = Inducive_Model.InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, pre_trained_word2vec)
     else:
-        model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed)
-
-    print("Hello")
+        model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed, user_count)
     content_numpy = content_embed.content_list.cpu().numpy() if args.cuda else content_embed.content_list.numpy()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -382,8 +390,8 @@ def main():
     G = data['G']
     user_count = data['user_count']
     love_list_count = []
-    if args.is_classification is False:
-        love_list_count = data['love_list_count']
+    # if args.is_classification is False:
+        # love_list_count = data['love_list_count']
     content = torch.LongTensor(data['content']).to(args.device)
     content_embed = ContentEmbed(content)
     train_data, val_data= prepare_dataloaders(data, args, content_embed)

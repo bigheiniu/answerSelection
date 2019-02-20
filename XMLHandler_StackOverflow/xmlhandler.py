@@ -59,6 +59,14 @@ def reorde_lover_dic(love_dic, user_dic, max_love_count, user_count):
 #             value.append(value_each)
 #     return value,[row, col], dimention
 
+
+def content_evaluation(content_kind, content_id_list, content):
+    th = 0
+    for content_id in content_id_list:
+        th += len(content[content_id])
+    avg_length = 1.0 * th / len(content_id_list)
+    print("[INFO] {} content avg length is {}".format(content_kind, avg_length))
+
 #quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context, love_dic, max_love_count=config_data_preprocess.max_love_count):
     user_context_reorder = {}
@@ -66,24 +74,29 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
 
     question = [line[0] for line in question_answer_user_vote]
     question_id_freq = list(zip(*np.unique(question, return_counts=True)))
-
     # remove question only have one answer
+    print("[INFO] Question Answer pairs {}".format(len(question_answer_user_vote)))
     _index = 0
     question_dic = {}
     for id, freq in question_id_freq:
-        if freq > 1:
+        if freq > 0:
             assert id not in question_dic, "question unique function is not right"
             question_dic[id] = _index
             _index += 1
     question_count = _index
+    print("[INFO]question count {}".format(question_count))
 
     user = np.array([line[2] for line in question_answer_user_vote if line[0] in question_dic])
     user_id_ = np.unique(user)
     user_length = len(user_id_)
+    print("[INFO] user count {}".format(user_length))
+
     user_dic = {id: index for index, id in enumerate(user_id_)}
 
     answer = np.array([line[1] for line in question_answer_user_vote if line[0] in question_dic])
     answer_id = np.unique(answer)
+    print("[INFO] answer count {}".format(len(answer_id)))
+
     answer_dic = {id: index + question_count for index, id in enumerate(answer_id)}
 
     remove_question_answer_user_vote = []
@@ -123,6 +136,10 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     for flag, (id, index) in enumerate(post_dic_sort.items()):
         assert flag == index,"[ERROR] Content reorder problem"
         body_reorder.append(body_dic[id])
+
+    content_evaluation("answer", list(range(question_count, len(body_reorder) - question_count)), body_reorder)
+    content_evaluation("question", list(range(question_count)), body_reorder)
+    content_evaluation("question title",list(range(question_count)), title_reorder)
 
     assert len(body_reorder) == len(post_dic), "[ERROR] Content length is not equal to answer + question"
     i = 0
@@ -179,5 +196,6 @@ def read_xml_data(path):
 
 
 def main(path):
+    print("STACK OVERFLOW")
     question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count = idReorder(*(read_xml_data(path)))
     return question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count,love_list_count

@@ -78,20 +78,30 @@ def convert_question_answer_userId(data, user_id2idx, content_id2idx):
 
 
 
+def content_evaluation(content_kind, content, content_id_list):
+    th = 0
+    for content_id in content_id_list:
+        th += len(content[content_id])
+    avg_length = 1.0 * th / len(content_id_list)
+    print("[INFO] {} content avg length is {}".format(content_kind, avg_length))
 
 def idReorder(question_answer_user_label, content, user_context):
     user_context_reorder = {}
     user= np.array([line[2] for line in question_answer_user_label])
     user_id = np.unique(user)
+    print("[INFO] Semival Question Answer Pairs: {}".format(len(question_answer_user_label)))
+    print("[INFO] Semival User Count {}".format(len(user_id)))
     user_count = len(user_id)
     user_dic = {id:index for index, id in enumerate(user_id)}
 
     question = [line[0] for line in question_answer_user_label]
     answer = np.array([line[1] for line in question_answer_user_label])
     question_id = np.unique(question)
+    print("[INFO] Semival Question Count {}".format(len(question_id)))
     question_dic = {id:index for index, id in enumerate(question_id)}
     question_count = len(question_id)
     answer_id = np.unique(answer)
+    print("[INFO] Semival Answer Count {}".format(len(answer_id)))
     answer_dic = {id:index + question_count for index, id in enumerate(answer_id)}
 
     for line_index in range(len(question_answer_user_label)):
@@ -109,7 +119,8 @@ def idReorder(question_answer_user_label, content, user_context):
         assert flag == index,"[ERROR]content reorder problem"
         content_reorder.append(content[id])
 
-
+    content_evaluation("answer", content, answer_id)
+    content_evaluation("question", content, question_id)
     return question_answer_user_label, content_reorder, user_context_reorder, user_count, question_count
 
 
@@ -139,6 +150,7 @@ def read_xml_data(path):
     return content, question_answer_user_label, user_context
 
 def main(path):
+    print("HELLO SEMINAL")
     content, question_answer_user_label, user_context = read_xml_data(path)
     question_answer_user_label, content, user_context, user_count, question_count= idReorder(question_answer_user_label, content, user_context)
     return  question_answer_user_label, content, user_context, user_count, question_count

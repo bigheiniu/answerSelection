@@ -6,6 +6,7 @@ from Util import content_len_statics, plot_bar, graph_eval
 from TextClean import TextClean
 import numpy as np
 import networkx as nx
+from networkx.algorithms.components.connected import  number_connected_components
 from Constants import Constants
 from Config import config_data_preprocess
 from Util import createLogHandler
@@ -93,7 +94,12 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
     G = nx.Graph()
     t = [1 for i in question_answer_user_label if len(i) == 3]
     ap = np.sum(t)
+    th = np.unique(np.array([np.array([t[0], t[1]]) for t in question_answer_user_label ]), axis=0)
+    th1 = np.unique(np.array([np.array([t[0], t[1]]) for t in question_answer_user_label]), axis=0)
+    th2 = np.unique(np.array([ np.array(line) for line in question_answer_user_label]), axis=0)
+    print("[INFO] unique question answer pair: {}, unique question answer user paris:{}, unique pairs {}".format(len(th), len(th1), len(th2)))
     print("[INFO] No Vote Answer: {}, All Answer: {}".format(ap, len(question_answer_user_label)))
+    i = 0
     for line in train_data:
         question = line[0]
         answer = line[1]
@@ -106,6 +112,7 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
         G.add_node(question)
         G.add_node(user)
         G.add_edge(question, user, a_id=answer, score=label, train_removed=False)
+        i += 1
     for line in val_data:
         question = line[0]
         answer = line[1]
@@ -118,7 +125,9 @@ def GenerateGraph(question_answer_user_label, train_index, val_index):
         G.add_node(question, type=0)
         G.add_node(user, type=1)
         G.add_edge(question, user, a_id=answer, score=label, train_removed=True)
-    print("[INFO] Graph contains {} edge.".format(len(G.edges())))
+        i += 1
+    print("[INFO] Graph contains {} edge. QA pairs are {}, count is {}".format(len(G.edges()), len(question_answer_user_label), i))
+    print("[INFO] Connected components {}".format(number_connected_components(G)))
     # print("[INFO] There are {} users, bigggest id is {}".format(len(set(user_list)), max(user_list)))
     return G
 

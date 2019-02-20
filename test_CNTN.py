@@ -34,7 +34,7 @@ def prepare_dataloaders(data, args):
     train_question, test_question = train_test_split_len(data['question_count'])
     train_question += data['user_count']
     test_question += data['user_count']
-    user_context =  None
+    user_context = None
 
     if args.is_classification:
 
@@ -101,10 +101,12 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss() if args.is_classification else Inducive_Layer.PairWiseHingeLoss(args.margin)
-
+    fuck = 0
+    you = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+        fuck += 1
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter, _ = map(lambda x: x.to(args.device), batch)
             optimizer.zero_grad()
@@ -116,28 +118,35 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         else:
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
+            if args.batch_size == 0:
+                continue
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
             score_neg = model(question_list, answer_neg_list, user_neg_list)[0]
-            t = 0
             result = 0
-            for i in count_list:
+            if count_list.shape[0] == 1:
+                result = loss_fn(score_neg, score_pos)
+            else:
+                t = 0
+                for i in count_list:
                 #torch.sum(regular_p + regular_n)
-                result += loss_fn(score_pos[t: t + i], score_neg[t : t + i])
-                t += i
+                    result += loss_fn(score_pos[t: t + i], score_neg[t : t + i])
+                    t = t +  i
             result.backward()
             optimizer.step()
+        you += 1
 
     train_epoch_count += 1
+    return fuck, you
 
 
 
-    for tag, value in model.named_parameters():
-        if value.grad is None:
-            continue
-        tag = tag.replace('.', '/')
-        logger.histo_summary(tag, value.cpu().detach().numpy(), train_epoch_count)
-        logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),train_epoch_count)
+    # for tag, value in model.named_parameters():
+    #     if value.grad is None:
+    #         continue
+    #     tag = tag.replace('.', '/')
+    #     logger.histo_summary(tag, value.cpu().detach().numpy(), train_epoch_count)
+    #     logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),train_epoch_count)
 
 
 
@@ -153,42 +162,58 @@ def eval_epoch(model, data, args, eval_epoch_count):
     info_test = {}
     loss_fn = nn.NLLLoss()
     loss = 0
+    #calculate  mean ndcgg
     ndcg_loss = 0
     query_count = 0
+    pat1_count = 0
+    fuck = 0
+    you = 0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
+            fuck += 1
             if args.is_classification:
                 q_val, a_val, u_val, gt_val, count = map(lambda x: x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
                 result, score, predict, feature_matrix = model(q_val, a_val, u_val, True)
-                loss += loss_fn(result, gt_val)
-                pred_label.append(tensorTonumpy(predict, args.cuda))
-                true_label.append(tensorTonumpy(gt_val, args.cuda))
+                try:
+                    loss += loss_fn(result, gt_val)
+                except:
+                    result = result.view(-1, 1)
+                    gt_val = gt_val.view(-1, 1)
+                    loss += loss_fn(result, gt_val)
+                gt_val = tensorTonumpy(gt_val, args.cuda)
 
                 count = tensorTonumpy(count, args.cuda)
-                relevance_score = tensorTonumpy(score[:,1], args.cuda)
+                relevance_score = tensorTonumpy(score, args.cuda)
+                predict = tensorTonumpy(predict, args.cuda)
                 feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
-                pred_score.append(relevance_score)
                 temp = 0
                 question_list.append(tensorTonumpy(q_val, args.cuda))
 
                 for i in count:
-                    score_ = relevance_score[temp:temp + i]
-                    feature_matrix_ = feature_matrix[temp:temp+i]
+                    score_slice = relevance_score[temp:temp + i][:,1]
+                    feature_matrix_slice = feature_matrix[temp:temp+i]
+                    pred_slice = predict[temp:temp+i]
                     #label order based on predicted score
-                    label = true_label[-1][temp:temp+i]
-                    sorted_index = np.argsort(-score_)
-                    label = label[sorted_index]
-                    label_score_order.append(label)
+                    label_slice = gt_val[temp:temp+i]
+                    true_label.append(label_slice)
+                    pred_score.append(score_slice)
+                    pred_label.append(pred_slice)
+
+                    sorted_index = np.argsort(-score_slice)
+                    label_slice_order = label_slice[sorted_index]
+
+                    label_score_order.append(label_slice_order)
 
                     #coverage metric
                     #index -> [0-k]
                     if args.use_dpp:
-                        top_answer_index = diversity(feature_matrix_, score_, sorted_index, args.dpp_early_stop)
+                        top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index, args.dpp_early_stop)
                     else:
-                        top_answer_index = list(range(i))
+                        #TODO: dpp comparsion
+                        top_answer_index = list(range(2))
                     #id -> [10990, 12334, 1351]
                     top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
                     val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
@@ -197,40 +222,48 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     temp += i
             else:
                 q_val, a_val, u_val, gt_val, count = map(lambda x:x.to(args.device), batch)
-                args.batch_size = gt_val.shape[0]
+                args.batch_size = count.shape[0]
+                if args.batch_size <= 1:
+                    continue
+                you += 1
                 relevance_score, feature_matrix = model(q_val, a_val, u_val, True)
                 count = tensorTonumpy(count, args.cuda)
                 relevance_score = tensorTonumpy(relevance_score, args.cuda)
                 temp = 0
                 feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
-                question_list.append(tensorTonumpy(q_val, args.cuda))
                 a_val = tensorTonumpy(a_val, args.cuda)
-                assert len(feature_matrix) == np.sum(count), "length not equall"
+
+                question_list.append(tensorTonumpy(q_val, args.cuda))
+                assert len(feature_matrix) == np.sum(count) , "length not equall"
 
                 for i in count:
                     # diversity order => problem
-                    feature_matrix_ = feature_matrix[temp:temp+i]
-                    score_ = relevance_score[temp:temp+i].reshape(-1,)
-                    gt_val_ = gt_val[temp:temp+i]
-                    a_val_ = a_val[temp:temp+i]
-                    val_answer_list.append(a_val_)
-                    sorted_index = np.argsort(-score_)
-                    t = score_[sorted_index]
+                    feature_matrix_slice = feature_matrix[temp:temp+i]
+                    score_slice = relevance_score[temp:temp+i].reshape(-1,)
+                    gt_val_slice = gt_val[temp:temp+i]
+                    a_val_slice = a_val[temp:temp+i]
+                    val_answer_list.append(a_val_slice)
+                    true_label.append(gt_val)
+                    pred_score.append(score_slice)
+                    sorted_index = np.argsort(-score_slice)
+
+                    if np.argmax(score_slice) == np.argmax(gt_val_slice):
+                        pat1_count += 1
                     # ground truth sorted based on generated score order
-                    score_sorted = gt_val_[sorted_index]
+                    score_sorted = gt_val_slice[sorted_index]
                     ndcg_loss += ndcg_at_k(score_sorted, args.ndcg_k)
                     query_count += 1
 
                     # coverage metric
                     # index -> [0-k]
                     if args.use_dpp:
-                        top_answer_index = diversity(feature_matrix_, score_, sorted_index,
+                        top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index,
                                                        args.dpp_early_stop)
                     else:
                         top_answer_index = list(range(i))
                     # id -> [10990, 12334, 1351]
-                    top_answer_id = a_val_[top_answer_index]
+                    top_answer_id = a_val_slice[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
 
@@ -239,10 +272,10 @@ def eval_epoch(model, data, args, eval_epoch_count):
     if args.is_classification:
         pred_label_flatt = list(itertools.chain.from_iterable(pred_label))
         true_label_flatt = list(itertools.chain.from_iterable(true_label))
-        score_list_flatt = list(itertools.chain.from_iterable(pred_score))
+        # score_list_flatt = list(itertools.chain.from_iterable(pred_score))
 
         accuracy, zero_count, one_count = Accuracy(true_label_flatt, pred_label_flatt)
-        mAP = mean_average_precision_scikit(true_label, pred_score)
+        mAP = mean_average_precision(label_score_order)
         pat1 = precision_at_k(label_score_order, 1)
         mpr = mean_reciprocal_rank(label_score_order)
 
@@ -255,13 +288,17 @@ def eval_epoch(model, data, args, eval_epoch_count):
         info_test['P@1'] = pat1
         info_test['mPR'] = mpr
 
-        print("[Info] Accuacy: {}; One Count {}".format(accuracy*1.0 / len(pred_label_flatt), len(pred_label_flatt), one_count))
-        print("[Info] mAP: {}".format(mAP))
+        print("[INFO] Accuacy: {}; One Count {}".format(accuracy, one_count))
+        print("[INFO] mAP: {}".format(mAP))
+        print("[INFO] p@1: {}".format(pat1))
+        print("[INFO] mpr: {}".format(mpr))
         eval_epoch_count += 1
     else:
         mean_ndcgg = ndcg_loss * 1.0 / query_count
+        pat1 = pat1_count / query_count
         info_test['nDCGG'] = mean_ndcgg
-        print("[INFO] Ranking Porblem nDCGG: {}".format(mean_ndcgg))
+        info_test['p@1'] = pat1
+        print("[INFO] Ranking Porblem nDCGG: {}, p@1: {}".format(mean_ndcgg, pat1))
 
     #coverage metric
 
@@ -270,7 +307,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     for tag, value in info_test.items():
         logger.scalar_summary(tag, value, eval_epoch_count)
 
-    return diversity_answer_recommendation, val_answer_list
+    return diversity_answer_recommendation, val_answer_list, fuck, you
 
 
     # diversity_recommendation(answer_id_dic,relevance_dic, content=content, early_stop=0.00001, topN=3)
@@ -348,9 +385,10 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
 
     for epoch_i in range(args.epoch):
 
-        train_epoch(model, train_data, optimizer, args, epoch_i)
-
-        diversity_answer_recommendation, _ = eval_epoch(model, val_data, args, eval_epoch_count)
+        fuck, you = train_epoch(model, train_data, optimizer, args, epoch_i)
+        print("train fuck is {}, you is {}".format(fuck, you))
+        diversity_answer_recommendation, _, fuck, you = eval_epoch(model, val_data, args, eval_epoch_count)
+        print("test fuck is {}, you is {}".format(fuck, you))
         diversity_answer_recommendation = [item - user_count for item in diversity_answer_recommendation]
         tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, content_numpy, args.div_topK, tfidf, lda)
 
@@ -372,32 +410,38 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
 def main():
 
     #===========Load DataSet=============#
-    args = config_model
-    print("cuda : {}".format(args.cuda))
-    data = torch.load(args.data)
-    word2ix = data['dict']
-    G = data['G']
-    user_count = data['user_count']
-    love_list_count = []
-    if args.is_classification is False:
-        love_list_count = data['love_list_count']
-    content = torch.LongTensor(data['content']).to(args.device)
-    train_data, val_data= prepare_dataloaders(data, args)
-    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-    model_name = args.model_name
+    datafoler = "data/"
+    datasetname = [ "store_stackoverflow_apple.torchpickle","store_math.torchpickle","store_stackoverflow_music.torchpickle"]
+    for datan in datasetname:
+        args = config_model
+        args.data = datafoler+datan
+        print("cuda : {}".format(args.cuda))
+        data = torch.load(args.data)
+        word2ix = data['dict']
+        G = data['G']
+        user_count = data['user_count']
+        love_list_count = []
+        if args.is_classification is False:
+            love_list_count = data['love_list_count']
+        content = torch.LongTensor(data['content']).to(args.device)
+        train_data, val_data= prepare_dataloaders(data, args)
+        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+        model_name = args.model_name
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[32, 64, 128, 256, 512],
-                   "lstm_num_layers":[1,2,3,4],
-                   "drop_out_lstm":[0.5],
-                    "lr":[1e-4, 1e-3, 1e-2],
-                    "margin":[0.1, 0.2, 0.3]
-                    }
-    pragram_list = grid_search(paragram_dic)
-    for paragram in pragram_list:
-        for key, value in paragram.items():
-            print("Key: {}, Value: {}".format(key, value))
-            setattr(args, key, value)
+    # paragram_dic = {"lstm_hidden_size":[32, 64, 128, 256, 512],
+    #                "lstm_num_layers":[1,2,3,4],
+    #                "drop_out_lstm":[0.5],
+    #                 "lr":[1e-4, 1e-3, 1e-2],
+    #                 "margin":[0.1, 0.2, 0.3]
+    #                 }
+    # pragram_list = grid_search(paragram_dic)
+    # for paragram in pragram_list:
+    #     for key, value in paragram.items():
+    #         print("Key: {}, Value: {}".format(key, value))
+    #         setattr(args, key, value)
+        print("[ATTENTION]File name {}".format( datan))
         train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content, love_list_count, model_name)
+        # exit()
 if __name__ == '__main__':
     main()

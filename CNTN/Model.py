@@ -32,12 +32,15 @@ class CNTN(nn.Module):
         question_embed.unsqueeze_(1)
         answer_embed = self.word_embedding(self.Content_emebd.content_embed(answer_list - self.user_count))
         answer_embed.unsqueeze_(1)
-        # question_length = question_embed.shape[-2]
-        # answer_length = answer_embed.shape[-2]
+        question_length = question_embed.shape[-2]
+        answer_length = answer_embed.shape[-2]
 
-
-
-        question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
+        #
+        #
+        try:
+            question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
+        except:
+            t1 = 1
         answer_cnn,_ = torch.max(self.cnn_lr(answer_embed), dim=-2)
 
         # cnn_count = len(self.cnn_list)
@@ -56,17 +59,21 @@ class CNTN(nn.Module):
         #     #Non-linear Feature Function
         #     question_embed = torch.tanh(kmax_pooling(question_embed, -2, k_question))
         #     answer_embed = torch.tanh(kmax_pooling(answer_embed, -2, k_answer))
-
-
-
-        # transpose question/answer embedding
-        # Final Layer
+        #
+        #
+        #
+        # # transpose question/answer embedding
+        # # Final Layer
         # question_embed = matrix2vec_max_pooling(question_embed, dim=-1)
         # answer_embed = matrix2vec_max_pooling(answer_embed, dim =-1)
         question_cnn.squeeze_()
         answer_cnn.squeeze_()
-        q_m_a = self.bilinear_M(question_cnn, answer_cnn)
+        # question_embed.squeeze_()
+        # answer_embed.squeeze_()
+        # q_m_a = self.bilinear_M(question_embed, answer_embed)
 
+        q_m_a = self.bilinear_M(question_cnn, answer_cnn)
+        # q_m_a = q_m_a + self.linear_V(torch.cat((question_embed, answer_embed), dim=-1))
         q_m_a = q_m_a + self.linear_V(torch.cat((question_cnn, answer_cnn), dim=-1))
         q_m_a = torch.tanh(q_m_a)
         score = self.linear_U(q_m_a)
@@ -80,6 +87,7 @@ class CNTN(nn.Module):
             return_list = [score]
         if need_feature:
             answer_vec = answer_cnn.detach()
+            # answer_vec = answer_embed.detach()
             return_list.append(answer_vec)
         return tuple(return_list)
 

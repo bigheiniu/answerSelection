@@ -47,6 +47,7 @@ class rankDataSet(data.Dataset):
                  question_id_list,
                  user_context=None,
                  content=None,
+                 user_count=None,
                  is_training=True
                  ):
         self.G = G
@@ -55,6 +56,7 @@ class rankDataSet(data.Dataset):
         self.user_context = user_context
         self.content = content
         self.is_training = is_training
+        self.user_count = user_count
 
     def random_negative(self, questionId, userId, score):
 
@@ -108,12 +110,12 @@ class rankDataSet(data.Dataset):
             if self.user_context is not None:
                 document = []
                 for post_id in self.user_context[user_pos]:
-                    document += self.content.content_embed(post_id)
+                    document += self.content.content_embed(post_id - self.user_count)
                     if len(document) > self.args.max_u_len:
                         document = document[:self.args.max_u_len]
                         break
                 if len(document) < self.args.max_u_len:
-                    pad_word = [Constants.PAD_WORD] * (self.args.max_u_len - len(document))
+                    pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
                     document += pad_word
                 user_pos_list.append(document)
             else:
@@ -134,13 +136,15 @@ class clasifyDataSet(data.Dataset):
                  args,
                  question_list,
                  user_context=None,
-                 content=None
+                 content=None,
+                 user_count = None
                  ):
         self.G = G
         self.args = args
         self.question_list = question_list
         self.user_context = user_context
         self.content = content
+        self.user_count = user_count
 
 
 
@@ -161,12 +165,12 @@ class clasifyDataSet(data.Dataset):
             if self.user_context is not None:
                 document = []
                 for post_id in self.user_context[user]:
-                    document += self.content.content_embed(post_id)
+                    document += self.content.content_embed(post_id - self.user_count)
                     if len(document) > self.args.max_u_len:
                         document = document[:self.args.max_u_len]
                         break
                 if len(document) < self.args.max_u_len:
-                    pad_word = [Constants.PAD_WORD] * (self.args.max_u_len - len(document))
+                    pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
                     document += pad_word
                 user_list.append(document)
             else:

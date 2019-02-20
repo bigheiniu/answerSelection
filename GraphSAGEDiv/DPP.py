@@ -42,7 +42,7 @@ def Lmatrix(featureMatrix, relevanceScore):
     for i in range(size_n):
         for j in range(size_n):
             L[i][j] = relevanceScore[i]*relevanceScore[j]*\
-                    (1 - spatial.distance.cosine(featureMatrix[i], featureMatrix[j]))
+                    (1 - spatial.distance.cosine(featureMatrix[i,:], featureMatrix[j,:]))
     return L
 
 def det(ids, L):

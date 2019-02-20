@@ -23,7 +23,7 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = True
+    DEBUG = False
     is_classification = True
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
@@ -31,15 +31,16 @@ class config_model:
 
 
     #basic setting
-    epoch = 60
+    epoch = 100
     log = None
     batch_size = 8
     num_class = 2 if is_classification else 1
-    model_name = "Graph"
+    model_name = "CNTN"
     cuda = True
     device = torch.device('cuda' if cuda else 'cpu' )
     #path to store data
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    # data = "data/store_stackoverflow_datascience.torchpickle"
     data = "data/store_SemEval.torchpickle"
     #=====================
     #content_data setting
@@ -108,7 +109,7 @@ class config_model:
     cntn_cnn_layers = 3
     cntn_kernel_size = [3,3,3]
     #k max_pooling last layer
-    k_max_s = 100
+    k_max_s = 30
 
     cntn_last_max_pool_size = k_max_s
     cntn_feature_r = 5

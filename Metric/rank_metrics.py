@@ -322,7 +322,7 @@ def Accuracy(label, predict):
             one_count += 1
         if predict[i] == label[i]:
             target += 1
-    return target, zero_count, one_count
+    return target *1.0/ len(predict), zero_count, one_count
 
 
 if __name__ == "__main__":

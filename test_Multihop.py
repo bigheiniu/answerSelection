@@ -14,6 +14,8 @@ from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision, precision_at_k, mean_reciprocal_rank
 from Config import config_model
+import os
+os.chdir("/home/yichuan/course/induceiveAnswer")
 
 
 
@@ -28,6 +30,7 @@ i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
 
+#WARNNING: cannot output label, can only output score
 def prepare_dataloaders(data, args, content_embed):
     # ========= Preparing DataLoader =========#
     train_question, test_question = train_test_split_len(data['question_count'])
@@ -82,7 +85,7 @@ def prepare_dataloaders(data, args, content_embed):
             rankDataSet(
                 G=data['G'],
                 args=args,
-                question_id_list=train_question,
+                question_id_list=test_question,
                 is_training=False,
                 user_context=user_context,
                 content=content_embed
@@ -107,11 +110,12 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter, _ = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
             optimizer.zero_grad()
-            result = model(q_iter, a_iter, u_iter)[0]
+            result = model(q_iter, a_iter, u_iter)
             loss = loss_fn(result, gt_iter)
             logger.scalar_summary("train_loss",loss.item(),1)
             loss.backward()
@@ -119,6 +123,8 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         else:
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
+            if args.batch_size == 0:
+                continue
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list, user_pos_list)
             score_neg = model(question_list, answer_neg_list, user_neg_list)
@@ -158,6 +164,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     loss = 0
     ndcg_loss = 0
     query_count = 0
+    pat1_count = 0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -192,7 +199,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     # if args.use_dpp:
                     #     top_answer_index = diversity(feature_matrix_, score_, sorted_index, args.dpp_early_stop)
                     # else:
-                    top_answer_index = list(range(2))
+                    top_answer_index = list(range(2)) if i > 1 else list(range(i))
                     #id -> [10990, 12334, 1351]
                     top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
                     val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
@@ -218,10 +225,13 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     score_slice = relevance_score[temp:temp+i].reshape(-1,)
                     gt_val_slice = gt_val[temp:temp+i]
 
-                    a_val_ = a_val[temp:temp+i]
-                    val_answer_list.append(a_val_)
+                    a_val_slice = a_val[temp:temp+i]
+                    val_answer_list.append(a_val_slice)
                     true_label.append(gt_val[temp:temp+i])
                     sorted_index = np.argsort(-score_slice)
+
+                    if np.argmax(score_slice) == np.argmax(gt_val_slice):
+                        pat1_count += 1
                     # ground truth sorted based on generated score order
                     label_sorted = gt_val_slice[sorted_index]
                     label_score_order.append(label_sorted)
@@ -234,9 +244,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     #     top_answer_index = diversity(feature_matrix_, score_, sorted_index,
                     #                                    args.dpp_early_stop)
                     # else:
-                    top_answer_index = list(range(i))
+                    top_answer_index = list(range(2)) if i > 1 else list(range(i))
                     # id -> [10990, 12334, 1351]
-                    top_answer_id = a_val_[top_answer_index]
+                    top_answer_id = a_val_slice[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
 
@@ -265,10 +275,11 @@ def eval_epoch(model, data, args, eval_epoch_count):
         print("[Info] mAP: {}".format(mAP))
         eval_epoch_count += 1
     else:
-        mAP =  mean_average_precision(label_score_order)
+        mean_pat1 = pat1_count * 1.0 / query_count
         mean_ndcgg = ndcg_loss * 1.0 / query_count
         info_test['nDCGG'] = mean_ndcgg
-        print("[INFO] Ranking Porblem nDCGG: {}, mAP is {}".format(mean_ndcgg, mAP))
+        info_test['P@1'] = mean_pat1
+        print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}".format(mean_ndcgg, mean_pat1))
 
     #coverage metric
 

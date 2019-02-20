@@ -186,15 +186,14 @@ def main():
         'question_count': question_count,
         'user_context':user_context
     }
-    if config.is_classification is not True:
+    if config.is_classification is False:
         data["title"] = title_id
         data["love_list_count"] = love_list_count
-        config.save_data="data/store_stackoverflow.torchpickle"
     else:
         config.save_data="data/store_SemEval.torchpickle"
-    logger.info("Dumping the processed data to pickle file: {}".format(config.save_data))
+    print("Dumping the processed data to pickle file: {}".format(config.save_data))
     torch.save(data, config.save_data)
-    logger.info("Finish text extraction, storing")
+    print("Finish text extraction, storing")
 
 
 if __name__ == '__main__':

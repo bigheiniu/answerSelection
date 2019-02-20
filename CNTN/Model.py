@@ -37,10 +37,7 @@ class CNTN(nn.Module):
 
         #
         #
-        try:
-            question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
-        except:
-            t1 = 1
+        question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
         answer_cnn,_ = torch.max(self.cnn_lr(answer_embed), dim=-2)
 
         # cnn_count = len(self.cnn_list)

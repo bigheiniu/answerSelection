@@ -87,7 +87,7 @@ def prepare_dataloaders(data, args, content_embed):
             rankDataSet(
                 G=data['G'],
                 args=args,
-                question_id_list=train_question,
+                question_id_list=test_question,
                 is_training=False,
                 user_context=user_context,
                 content=content_embed,
@@ -201,7 +201,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     if args.use_dpp:
                         top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index, args.dpp_early_stop)
                     else:
-                        top_answer_index = list(range(i))
+                        top_answer_index = list(range(2)) if i > 1 else [0]
                     #id -> [10990, 12334, 1351]
                     top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
                     val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
@@ -245,7 +245,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
                         top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index,
                                                        args.dpp_early_stop)
                     else:
-                        top_answer_index = list(range(i))
+                        top_answer_index = list(range(2)) if i > 1 else [0]
                     # id -> [10990, 12334, 1351]
                     top_answer_id = a_val_slice[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)

@@ -53,9 +53,15 @@ class TFIDFSimilar:
         content_vec = np.zeros(self.n_features)
         highRank_vec = np.zeros(self.n_features)
         for index in content:
-            content_vec[0][index] += 1
+            try:
+                content_vec[0][index] += 1
+            except:
+                continue
         for index in highRank:
-            highRank_vec[0][index] += 1
+            try:
+                highRank_vec[0][index] += 1
+            except:
+                continue
         i = self.tfModel.transform(content_vec)
         j = self.tfModel.transform(highRank_vec)
         cosine_similarities = linear_kernel(i,j).flatten()
@@ -101,8 +107,12 @@ class LDAsimilarity:
     def similarity(self, content, highrank):
         content_corpus = self.list2tuple(content)
         highrank_corpus = self.list2tuple(highrank)
-        lda_content_vec = self.lda[content_corpus]
-        highrank_content_vec = self.lda[highrank_corpus]
+        #TODO: index 8184 is out of bounds for axis 1 with size 8060
+        try:
+            lda_content_vec = self.lda[content_corpus]
+            highrank_content_vec = self.lda[highrank_corpus]
+        except:
+            return 0
         return cossim(lda_content_vec, highrank_content_vec)
 
 

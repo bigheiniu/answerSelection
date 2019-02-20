@@ -12,10 +12,10 @@ class config_data_preprocess:
     test_size = 0.4
 
     # location store the raw data
-    raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/music"
+    raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/apple"
 
     # store preprocessed data
-    save_data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    save_data = "data/store_apple.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     log_file = "text_log/preprocess.log"
     logger_name = "preprocess"
     max_love_count = 10
@@ -24,7 +24,9 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    is_classification = True
+    cuda = False
+    model_name = "CNTN"
+    is_classification = False
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 
@@ -35,13 +37,13 @@ class config_model:
     log = None
     batch_size = 8
     num_class = 2 if is_classification else 1
-    model_name = "CNTN"
-    cuda = True
+
+
     device = torch.device('cuda' if cuda else 'cpu' )
     #path to store data
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
-    # data = "data/store_stackoverflow_datascience.torchpickle"
-    data = "data/store_SemEval.torchpickle"
+    data = "data/store_stackoverflow_datascience.torchpickle"
+    # data = "/home/yichuan/course/induceiveAnswer/data/store_SemEval.torchpickle"
     #=====================
     #content_data setting
     #====================
@@ -85,14 +87,14 @@ class config_model:
 
 
     #diversity setting
-    use_dpp = True
+    use_dpp = False
     div_topK = 1
     dpp_early_stop = 0.0001
 
     #coverage test model setting
     lda_topic = 20
     #whether the coverage test model is already trained or not
-    cov_pretrain = True
+    cov_pretrain = False
     # location to store or load model
     cov_model_path = "result"
 

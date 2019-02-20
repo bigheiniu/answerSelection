@@ -77,14 +77,18 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     # remove question only have one answer
     print("[INFO] Question Answer pairs {}".format(len(question_answer_user_vote)))
     _index = 0
+    t1 = 0
     question_dic = {}
     for id, freq in question_id_freq:
-        if freq > 0:
+        #min question
+        if freq > 5:
             assert id not in question_dic, "question unique function is not right"
             question_dic[id] = _index
             _index += 1
+        else:
+            t1 += 1
     question_count = _index
-    print("[INFO]question count {}".format(question_count))
+    print("[INFO]question more than 5 answers {}, and {} has less 5 answers".format(question_count,t1 ))
 
     user = np.array([line[2] for line in question_answer_user_vote if line[0] in question_dic])
     user_id_ = np.unique(user)

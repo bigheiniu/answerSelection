@@ -81,7 +81,7 @@ def prepare_dataloaders(data, args):
             rankDataSet(
                 G=data['G'],
                 args=args,
-                question_id_list=train_question,
+                question_id_list=test_question,
                 is_training=False,
                 user_context=user_context
 
@@ -168,6 +168,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
     pat1_count = 0
     fuck = 0
     you = 0
+    if data is None:
+        print("[ERROR] Data is None")
+        exit()
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -193,6 +196,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 question_list.append(tensorTonumpy(q_val, args.cuda))
 
                 for i in count:
+                    query_count += 1
                     score_slice = relevance_score[temp:temp + i][:,1]
                     feature_matrix_slice = feature_matrix[temp:temp+i]
                     pred_slice = predict[temp:temp+i]
@@ -213,7 +217,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
                         top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index, args.dpp_early_stop)
                     else:
                         #TODO: dpp comparsion
-                        top_answer_index = list(range(2))
+                        top_answer_index = list(range(2)) if i > 1 else [0]
                     #id -> [10990, 12334, 1351]
                     top_answer_id = tensorTonumpy(a_val[temp:temp+i][top_answer_index], args.cuda)
                     val_answer = tensorTonumpy(a_val[temp:temp+i], args.cuda)
@@ -261,14 +265,16 @@ def eval_epoch(model, data, args, eval_epoch_count):
                         top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index,
                                                        args.dpp_early_stop)
                     else:
-                        top_answer_index = list(range(i))
+
+                        top_answer_index = list(range(2)) if i > 1 else [0]
                     # id -> [10990, 12334, 1351]
                     top_answer_id = a_val_slice[top_answer_index]
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
 
 
-
+    if query_count == 0:
+        return
     if args.is_classification:
         pred_label_flatt = list(itertools.chain.from_iterable(pred_label))
         true_label_flatt = list(itertools.chain.from_iterable(true_label))
@@ -362,14 +368,14 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
     elif model_name == "CNTN":
         model = CNTN_Model.CNTN(args, pre_trained_word2vec, content_embed, user_count)
     elif model_name == "Hybrid":
-        model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec, content_embed)
+        model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec, content_embed, user_count)
     elif model_name == "Graph":
         adj, adj_edge, _ = Adjance(G, args.max_degree)
         adj = adj.to(args.device)
         adj_edge = adj_edge.to(args.device)
         model = Inducive_Model.InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, pre_trained_word2vec)
     else:
-        model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed)
+        model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed, user_count)
 
 
     content_numpy = content.cpu().numpy() if args.cuda else content.numpy()
@@ -411,7 +417,7 @@ def main():
 
     #===========Load DataSet=============#
     datafoler = "data/"
-    datasetname = [ "store_stackoverflow_apple.torchpickle","store_math.torchpickle","store_stackoverflow_music.torchpickle"]
+    datasetname = ["store_tex.torchpickle", "store_apple.torchpickle","store_math.torchpickle"]
     for datan in datasetname:
         args = config_model
         args.data = datafoler+datan

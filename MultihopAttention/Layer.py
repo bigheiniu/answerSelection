@@ -112,7 +112,10 @@ class QuestionAttention(nn.Module):
     def forward(self, hidden_list, m_q):
         assert len(m_q.shape) == 2,"shape of m_q is {}".format(m_q.shape)
         S = torch.tanh(self.w_q(hidden_list)) * torch.tanh(self.w_m(m_q).unsqueeze(-2))
-        alpha = F.softmax(self.w_attention(S), dim=-2)
+        try:
+            alpha = F.softmax(self.w_attention(S), dim=-2)
+        except:
+            t = 1
         output = torch.sum(alpha * hidden_list, dim=-2)
         m_q = m_q + output
         return output, m_q

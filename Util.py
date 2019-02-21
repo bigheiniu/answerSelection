@@ -49,7 +49,7 @@ class ContentEmbed:
     def content_list(self):
         return self.content
     def content_embed(self, batch_id):
-        if type(batch_id) is int:
+        if type(batch_id) is np.int or np.int64:
             content = self.content[batch_id]
         else:
             shape = [*batch_id.shape]

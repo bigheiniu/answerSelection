@@ -53,6 +53,7 @@ def get_answer_user_dic(question_answer_user_vote):
     return { line[1]:line[2] for line in question_answer_user_vote}
 
 def get_answer_vote(question_answer_user_vote):
+    #samller in the begining
     vote_sort_by_answerid = sorted([(line[1], line[3]) for line in question_answer_user_vote], key=lambda x: x[0])
     return np.array([di[1] for di in vote_sort_by_answerid])
 
@@ -96,13 +97,13 @@ def convert_instance_to_idx_seq(word_insts, word2idx):
     ''' Mapping words to idx sequence. '''
     return [[word2idx.get(w, Constants.UNK) for w in s] for s in word_insts]
 
-def train_test_split(train_per, question_count):
+def train_test_split(train_per, question_count, user_count):
     question_index = np.array(list(range(question_count)))
     np.random.shuffle(question_index)
     begin = int(train_per * question_count)
-    test_question = question_index[:begin]
-    train_questin = question_index[begin:]
-    return train_questin, test_question
+    train_question = question_index[:begin] + user_count
+    test_question = question_index[begin:] + user_count
+    return train_question, test_question
 
 def question_answer_user_vote_split(question_answer_user_vote, train_question, test_question):
     train = []
@@ -212,7 +213,7 @@ def main():
     #split train-valid-test dataset
 
 
-    train_question, test_question= train_test_split(config.train_per, question_count)
+    train_question, test_question= train_test_split(config.train_per, question_count, user_count)
     train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
 
     G = GenerateGraph(train_data, test_data)
@@ -222,8 +223,9 @@ def main():
 
 
     answer_user_dic = get_answer_user_dic(question_answer_user_vote)
-    vote_sort_by_answerid = get_answer_user_dic(question_answer_user_vote)
+    vote_sort_by_answerid = get_answer_vote(question_answer_user_vote)
     data = {
+        'hello': "you",
         'settings': config,
         'dict': word2idx,
         'content': word_id,

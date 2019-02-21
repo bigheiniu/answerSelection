@@ -9,13 +9,12 @@ class HybridAttentionModel(nn.Module):
     '''
     word_embedding -> lstm -> self attention -> hybrid attention
     '''
-    def __init__(self, args, pretrain_embed, content_embed, user_count):
+    def __init__(self, args, pretrain_embed, user_count):
         super(HybridAttentionModel, self).__init__()
         self.args = args
         self.user_count = user_count
         self.embed_size = args.embed_size
         self.lstm_hidden_size = args.lstm_hidden_size
-        self.content_embed = content_embed
 
         self.word_embed = nn.Embedding.from_pretrained(pretrain_embed)
         # batch * max_len * embed_size
@@ -62,8 +61,8 @@ class HybridAttentionModel(nn.Module):
         :param user_context: N * L_document
         :return:
         '''
-        q_embed = self.word_embed(self.content_embed.content_embed(question - self.user_count))
-        a_embed = self.word_embed(self.content_embed.content_embed(answer - self.user_count))
+        q_embed = self.word_embed(question)
+        a_embed = self.word_embed(answer)
         u_embed = self.word_embed(user_context)
 
         #WARNING: size of vector is not always have the same length
@@ -101,9 +100,9 @@ class HybridAttentionModel(nn.Module):
         a_yi = self.ratio_layer(a_alpha_atten, a_beta_atten)
         u_theta = self.ratio_layer(q_alpha_atten, q_beta_atten, u_lambda_atten)
 
-        q_h_new = (q_yi.unsqueeze(2) * q_lstm).sum(dim=-2)
-        a_h_new = (a_yi.unsqueeze(2) * a_lstm).sum(dim=-2)
-        u_h_new = (u_theta.unsqueeze(2) * q_lstm).sum(dim=-2)
+        q_h_new = (q_yi.unsqueeze(-1) * q_lstm).sum(dim=-2)
+        a_h_new = (a_yi.unsqueeze(-1) * a_lstm).sum(dim=-2)
+        u_h_new = (u_theta.unsqueeze(-1) * q_lstm).sum(dim=-2)
         h = torch.tanh(self.w_q(q_h_new) + self.w_a(a_h_new) + self.w_u(u_h_new))
 
         # h_test = torch.tanh(q_lstm.mean(dim=-2) * a_lstm.mean(-2) * u_vec)

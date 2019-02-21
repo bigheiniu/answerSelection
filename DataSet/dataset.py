@@ -8,6 +8,23 @@ import itertools
 from scipy.stats import rankdata
 
 
+def context_collect_fn_train(batch):
+    question_list = torch.LongTensor([item[0] for item in batch])
+    answer_pos_list = torch.LongTensor([item[1] for item in batch])
+    user_pos_list = torch.LongTensor([item[2] for item in batch])
+    score_pos_list = torch.FloatTensor([item[3] for item in batch])
+    answer_neg_list = torch.LongTensor([item[4] for item in batch])
+    user_neg_list = torch.LongTensor([item[5] for item in batch])
+    return question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list
+
+def context_collect_fn_test(batch):
+    question_list = torch.LongTensor([item[0] for item in batch])
+    answer_pos_list = torch.LongTensor([item[1] for item in batch])
+    user_pos_list = torch.LongTensor([item[2] for item in batch])
+    score_pos_list = torch.FloatTensor([item[3] for item in batch])
+    question_id_list = torch.LongTensor([item[4] for item in batch])
+    return question_list, answer_pos_list, user_pos_list, score_pos_list, question_id_list
+
 
 def my_clloect_fn_train(batch):
     # btach = list(zip(*batch))
@@ -123,11 +140,11 @@ class rankDataSetEdge(data.Dataset):
 class rankDataSetUserContext(data.Dataset):
     def __init__(self,
                  args,
-                 answer_score,
                  question_answer_user_vote,
+                 content,
+                 answer_score=None,
                  question_count=None,
                  user_context=None,
-                 content=None,
                  user_count=None,
                  is_training=True,
                  answer_user_dic=None
@@ -141,26 +158,25 @@ class rankDataSetUserContext(data.Dataset):
         self.question_answer_user_vote = question_answer_user_vote
         self.answer_user_dic = answer_user_dic
         self.answer_score = answer_score
-        self.rank_score, self.rank_index = self.rankAnswer(answer_score)
+        self.answer_index_sort = self.rankAnswer(answer_score)
 
 
 
     def rankAnswer(self, answer_score):
-        rank_score = [int(i) for i in rankdata(answer_score, method='ordinal')]
-        rank_dic = {rank:index for index, rank in enumerate(rank_score) }
-        rank_index = [ index for _, index in  sorted(rank_dic.items(), key=lambda x: x[0])]
-        return rank_score, rank_index
+        #small in the begin
+        rank_answer_index = np.argsort(answer_score)
+        return rank_answer_index
 
     def negative_sampling(self, answerid):
-        rank = self.rank_score[answerid - self.user_count - self.question_count]
-        negative_answer_candidate = self.rank_index[:rank]
-        negative_score = self.answer_score[self.rank_index[:rank]]
-        negative_pro = negative_score / np.sum(negative_score)
-        if len(negative_answer_candidate) > self.args.neg_size:
-            negative_answer = np.random.choice(negative_answer_candidate, self.args.neg_size, replace=False, p=negative_pro)
+        # rank = self.rank_score[answerid - self.user_count - self.question_count]
+        # negative_answer_candidate = self.rank_index[:rank]
+        answerid = answerid - self.user_count - self.question_count
+        locate = np.where(self.answer_index_sort == answerid)[0][0]
+        if locate > self.args.neg_size:
+            negative_answer = np.random.choice(list(range(locate)), self.args.neg_size, replace=False)
         else:
-            negative_answer = np.random.choice(list(range(len(self.answer_score))), self.args.neg_size, replace=False, p=self.answer_score/np.sum(self.answer_score))
-
+            negative_answer = np.random.choice(list(range(len(self.answer_score))), self.args.neg_size, replace=False)
+        negative_answer = negative_answer[0]
         return negative_answer + self.user_count + self.question_count
 
     def get_user_context(self, userid):
@@ -181,17 +197,20 @@ class rankDataSetUserContext(data.Dataset):
 
     def __getitem__(self, index):
         question_answer_vote_line = self.question_answer_user_vote[index]
-        question = question_answer_vote_line[0]
-        answer = question_answer_vote_line[1]
+        question_id = question_answer_vote_line[0]
+        answer_id = question_answer_vote_line[1]
+        answer_content = self.content.content_embed(answer_id - self.user_count)
+        question_content = self.content.content_embed(question_id - self.user_count)
         user_context = self.get_user_context(question_answer_vote_line[2])
         score = question_answer_vote_line[3]
         if self.is_training:
-            neg_ans = self.negative_sampling(answer)
+            neg_ans = self.negative_sampling(answer_id)
+            neg_ans_content = self.content.content_embed(neg_ans - self.user_count)
             neg_user_context = self.get_user_context(self.answer_user_dic[neg_ans])
 
-            return question, answer, user_context, score, neg_ans, neg_user_context
+            return question_content, answer_content, user_context, score, neg_ans_content, neg_user_context
         else:
-            return question, answer, user_context, score
+            return question_content, answer_content, user_context, score, question_id
 
 
 
@@ -208,9 +227,9 @@ class rankData(data.Dataset):
                  args,
                  answer_score,
                  question_answer_user_vote,
+                 content,
                  question_count=None,
                  user_context=None,
-                 content=None,
                  user_count=None,
                  is_training=True,
                  answer_user_dic=None

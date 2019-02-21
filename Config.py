@@ -12,10 +12,10 @@ class config_data_preprocess:
     test_per = 0.25
 
     # location store the raw data
-    raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/apple"
+    raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/math"
 
     # store preprocessed data
-    save_data = "data/apple.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    save_data = "data/math.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     log_file = "text_log/preprocess.log"
     logger_name = "preprocess"
     max_love_count = 10
@@ -23,7 +23,7 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = True
+    DEBUG = False
     cuda = True
     model_name = "Hybrid"
     is_classification = False
@@ -36,7 +36,7 @@ class config_model:
     #basic setting
     epoch = 100
     log = None
-    batch_size = 1
+    batch_size = 64
     num_class = 2 if is_classification else 1
 
 
@@ -75,7 +75,7 @@ class config_model:
     #================
 
     lstm_hidden_size = 128
-    lstm_num_layers = 1
+    lstm_num_layers = 2
     drop_out_lstm = 0.3
     bidirectional = False
     bidire_layer = 2 if bidirectional else 1
@@ -89,7 +89,7 @@ class config_model:
 
     #diversity setting
     use_dpp = False
-    div_topK = 1
+    div_topK = 3
     dpp_early_stop = 0.0001
 
     #coverage test model setting

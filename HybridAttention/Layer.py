@@ -131,11 +131,11 @@ class RatioLayer(nn.Module):
         if lambda_ is None:
             #question-answer
             ratio = alpha_ / beta_
-            yi = F.softmax(ratio, dim=-2)
+            yi = F.softmax(ratio, dim=-1)
             coef = yi
         else:
             ratio = lambda_ * alpha_ / beta_
-            theta_ = F.softmax(ratio, dim=-2)
+            theta_ = F.softmax(ratio, dim=-1)
             coef = theta_
 
         return coef

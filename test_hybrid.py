@@ -5,11 +5,8 @@ from Util import *
 from GraphSAGEDiv import Model as Inducive_Model
 from GraphSAGEDiv import Layer as Inducive_Layer
 from HybridAttention import Model as Hybrid_Model
-from MultihopAttention import Model as MultiHop_Model
-from AMRNL import Model as AMRNL_Model
-from CNTN import Model as CNTN_Model
 
-from DataSet.dataset import clasifyDataSet, rankDataSet, my_clloect_fn_train, my_collect_fn_test, classify_collect_fn
+from DataSet.dataset import clasifyDataSet, rankDataSetUserContext, context_collect_fn_train, context_collect_fn_test, classify_collect_fn
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision, Accuracy, precision_at_k, mean_reciprocal_rank
@@ -29,14 +26,12 @@ i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
 
-def prepare_dataloaders(data, args, content_embed):
+def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
-    train_question, test_question = train_test_split_len(data['question_count'])
-    train_question += data['user_count']
-    test_question += data['user_count']
     user_context = data['user_context']
-    content_embed = ContentEmbed(data['content'])
     user_count = data['user_count']
+    question_count = data['question_count']
+    content_embed = ContentEmbed(data['content'])
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
@@ -67,37 +62,42 @@ def prepare_dataloaders(data, args, content_embed):
         collate_fn=classify_collect_fn,
         shuffle=True)
     else:
+        train_data = data['question_answer_user_train']
+        test_data = data['question_answer_user_test']
+        answer_score = data['vote_sort']
+        answer_user_dic = data['answer_user_dic']
         train_loader = torch.utils.data.DataLoader(
-            rankDataSet(
-                G=data['G'],
+            rankDataSetUserContext(
                 args=args,
-                question_id_list=train_question,
-                is_training=True,
+                question_answer_user_vote=train_data,
+                content=content_embed,
                 user_context=user_context,
-                content = content_embed,
-                user_count=user_count
+                question_count=question_count,
+                user_count=user_count,
+                is_training=True,
+                answer_score=answer_score,
+                answer_user_dic=answer_user_dic
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True,
-            collate_fn= my_clloect_fn_train
+            collate_fn= context_collect_fn_train
         )
 
         val_loader = torch.utils.data.DataLoader(
-            rankDataSet(
-                G=data['G'],
+            rankDataSetUserContext(
                 args=args,
-                question_id_list=test_question,
+                question_answer_user_vote=test_data,
                 is_training=False,
                 user_context=user_context,
                 content=content_embed,
                 user_count=user_count
 
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True,
-            collate_fn=my_collect_fn_test
+            collate_fn=context_collect_fn_test
 
         )
 
@@ -126,22 +126,14 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             optimizer.step()
         else:
             flag_j += 1
-            question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list, score_neg_list, count_list = map(lambda x: x.to(args.device), batch)
+            question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
-            if args.batch_size <= 5:
-                flag_i += 1
-                continue
 
             # print("batch size {}".format(args.batch_size))
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
             score_neg = model(question_list, answer_neg_list, user_neg_list)[0]
-            t = 0
-            result = 0
-            for i in count_list:
-                #torch.sum(regular_p + regular_n)
-                result += loss_fn(score_pos[t: t + i], score_neg[t : t + i])
-                t += i
+            result = loss_fn(score_pos, score_neg)
             result.backward()
             optimizer.step()
 
@@ -165,6 +157,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     pred_score = []
     true_label = []
     label_score_order = []
+    question_answer_label_dic = {}
     diversity_answer_recommendation = []
     val_answer_list = []
     question_list = []
@@ -216,47 +209,20 @@ def eval_epoch(model, data, args, eval_epoch_count):
                     diversity_answer_recommendation.append(top_answer_id)
                     temp += i
             else:
-                q_val, a_val, u_val, gt_val, count = map(lambda x:x.to(args.device), batch)
+                q_val, a_val, u_val, gt_val, question_id = map(lambda x:x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
-                if len(gt_val.shape) == 1 or args.batch_size <= 1:
-                    continue
-                relevance_score, feature_matrix = model(q_val, a_val, u_val, True)
-                count = tensorTonumpy(count, args.cuda)
+                # if len(gt_val.shape) == 1 or args.batch_size <= 1:
+                #     continue
+                relevance_score = model(q_val, a_val, u_val, False)[0]
                 relevance_score = tensorTonumpy(relevance_score, args.cuda)
-                temp = 0
-                feature_matrix = tensorTonumpy(feature_matrix, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
-                question_list.append(tensorTonumpy(q_val, args.cuda))
                 a_val = tensorTonumpy(a_val, args.cuda)
-                assert len(feature_matrix) == np.sum(count), "length not equall"
-
-                for i in count:
-                    # diversity order => problem
-                    feature_matrix_slice = feature_matrix[temp:temp+i]
-                    score_slice = relevance_score[temp:temp+i].reshape(-1,)
-                    gt_val_slice = gt_val[temp:temp+i]
-                    a_val_slice = a_val[temp:temp+i]
-                    val_answer_list.append(a_val_slice)
-                    sorted_index = np.argsort(-score_slice)
-                    if np.argmax(gt_val_slice) == np.argmax(score_slice):
-                        pat1_count += 1
-
-                    # ground truth sorted based on generated score order
-                    score_sorted = gt_val_slice[sorted_index]
-                    ndcg_loss += ndcg_at_k(score_sorted, args.ndcg_k)
-                    query_count += 1
-
-                    # coverage metric
-                    # index -> [0-k]
-                    if args.use_dpp:
-                        top_answer_index = diversity(feature_matrix_slice, score_slice, sorted_index,
-                                                       args.dpp_early_stop)
+                question_id = tensorTonumpy(question_id, args.cuda)
+                for q_id, a_feature, vote, pred_score in zip(question_id, a_val, gt_val, relevance_score):
+                    if q_id in question_answer_label_dic:
+                        question_answer_label_dic[q_id].append([a_feature, vote, pred_score[0]])
                     else:
-                        top_answer_index = list(range(2)) if i > 1 else [0]
-                    # id -> [10990, 12334, 1351]
-                    top_answer_id = a_val_slice[top_answer_index]
-                    diversity_answer_recommendation.append(top_answer_id)
-                    temp += i
+                        question_answer_label_dic[q_id] = [[a_feature, vote, pred_score[0]]]
 
 
 
@@ -283,11 +249,28 @@ def eval_epoch(model, data, args, eval_epoch_count):
         print("[Info] mAP: {}".format(mAP))
         eval_epoch_count += 1
     else:
-        mean_ndcgg = ndcg_loss * 1.0 / query_count
-        mean_pat1 = pat1_count * 1.0 / query_count
-        info_test['nDCGG'] = mean_ndcgg
+        # rank the score based on predice_score
+        pat1_count = 0
+        ndcg_loss = []
+        for value in question_answer_label_dic.values():
+            sorted_value = sorted(value, key=lambda x: -x[-1])
+            maxVote = np.argmax([line[-2] for line in value])
+            maxPredic = np.argmax([line[-1] for line in value])
+            if maxPredic == maxVote:
+                pat1_count += 1
+
+            order_vote = []
+            feature_matrix = []
+            for line in sorted_value:
+                order_vote.append(line[-2])
+                feature_matrix.append(line[0])
+            diversity_answer_recommendation.append(feature_matrix)
+            ndcg_loss.append(ndcg_at_k(order_vote, 3))
+        mean_pat1 = pat1_count * 1.0 / len(ndcg_loss)
+        ndcg_loss = np.mean(ndcg_loss)
+        info_test['nDCGG'] = ndcg_loss
         info_test['P@1'] = mean_pat1
-        print("[INFO] Ranking Porblem nDCGG: {}, p@1: {}".format(mean_ndcgg, mean_pat1))
+        print("[INFO] Ranking Porblem nDCGG: {}, p@1: {}".format(ndcg_loss, mean_pat1))
 
     #coverage metric
 
@@ -303,7 +286,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
 
 
-def diversity_evaluation(diversity_answer_recommendation, content, topK, tfidf, lda):
+def diversity_evaluation(diversity_answer_recommendation, topK, tfidf, lda):
     #init evaluate class
     tf_idf_score = 0
     lda_score = 0
@@ -313,12 +296,10 @@ def diversity_evaluation(diversity_answer_recommendation, content, topK, tfidf, 
         temp_tfidf_score = 0
         temp_lda_score = 0
         for answer in candidate_answer_list:
-            answer_content = content[answer].tolist()
-            candidate_word_space += answer_content
+            candidate_word_space += answer.tolist()
         for top_answer in candidate_answer_list[:topK]:
-            top_answer_content = content[top_answer]
-            temp_tfidf_score += tfidf.simiarity(candidate_word_space, top_answer_content)
-            temp_lda_score += lda.similarity(candidate_word_space, top_answer_content)
+            temp_tfidf_score += tfidf.simiarity(candidate_word_space, top_answer)
+            temp_lda_score += lda.similarity(candidate_word_space, top_answer)
 
 
         tf_idf_score += temp_tfidf_score
@@ -342,24 +323,9 @@ def grid_search(params_dic):
 
 
 
-def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, content_embed, love_list_count, model_name):
-    if model_name == "AMRNL":
-        love_adj = ContentEmbed(torch.LongTensor(love_list_count[0]).to(args.device))
-        love_len = ContentEmbed(torch.FloatTensor(love_list_count[1]).view(-1,1).to(args.device))
-        model = AMRNL_Model.AMRNL(args, user_count, pre_trained_word2vec, content_embed, love_adj, love_len)
-    elif model_name == "CNTN":
-        model = CNTN_Model.CNTN(args, pre_trained_word2vec, content_embed, user_count)
-    elif model_name == "Hybrid":
-        model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec, content_embed,user_count)
-    elif model_name == "Graph":
-        adj, adj_edge, _ = Adjance(G, args.max_degree)
-        adj = adj.to(args.device)
-        adj_edge = adj_edge.to(args.device)
-        model = Inducive_Model.InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, pre_trained_word2vec)
-    else:
-        model = MultiHop_Model.MultihopAttention(args, pre_trained_word2vec, content_embed)
+def train(args, train_data, val_data, user_count ,pre_trained_word2vec, content_numpy):
+    model = Hybrid_Model.HybridAttentionModel(args, pre_trained_word2vec,user_count)
 
-    content_numpy = content_embed.content_list.cpu().numpy() if args.cuda else content_embed.content_list.numpy()
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -375,8 +341,7 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
         diversity_answer_recommendation, _ = eval_epoch(model, val_data, args, eval_epoch_count)
-        diversity_answer_recommendation = [item - user_count for item in diversity_answer_recommendation]
-        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, content_numpy, args.div_topK, tfidf, lda)
+        tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, args.div_topK, tfidf, lda)
 
         info_val['tfidf_cov'] = tfidf_cov
         info_val['lda_cov'] = lda_cov
@@ -399,21 +364,15 @@ def main():
     args = config_model
     print("cuda : {}".format(args.cuda))
     datafoler = "data/"
-    datasetname = ["store_apple.torchpickle", "store_math.torchpickle"]
+    datasetname = ["apple.torchpickle", "tex.torchpickle" ,"math.torchpickle"]
     for datan in datasetname:
         args.data = datafoler + datan
         data = torch.load(args.data)
         word2ix = data['dict']
-        G = data['G']
         user_count = data['user_count']
-        love_list_count = []
-        if args.is_classification is False:
-            love_list_count = data['love_list_count']
-        content = torch.LongTensor(data['content']).to(args.device)
-        content_embed = ContentEmbed(content)
-        train_data, val_data= prepare_dataloaders(data, args, content_embed)
+        content = np.array(data['content'])
+        train_data, val_data= prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        model_name = "Hybrid"
         # model_name = args.model_name
     #grid search
     # # if args.model == 1:
@@ -428,6 +387,6 @@ def main():
     #     for key, value in paragram.items():
     #         print("Key: {}, Value: {}".format(key, value))
     #         setattr(args, key, value)
-        train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_embed, love_list_count, model_name)
+        train(args, train_data, val_data, user_count, pre_trained_word2vec, content)
 if __name__ == '__main__':
     main()

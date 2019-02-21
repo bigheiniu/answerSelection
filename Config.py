@@ -24,8 +24,8 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = False
-    model_name = "CNTN"
+    cuda = True
+    model_name = "Multi"
     is_classification = False
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
@@ -42,7 +42,7 @@ class config_model:
     device = torch.device('cuda' if cuda else 'cpu' )
     #path to store data
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
-    data = "data/store_stackoverflow_datascience.torchpickle"
+    # data = "data/store_stackoverflow_datascience.torchpickle"
     # data = "/home/yichuan/course/induceiveAnswer/data/store_SemEval.torchpickle"
     #=====================
     #content_data setting

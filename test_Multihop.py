@@ -387,33 +387,25 @@ def train(args, train_data, val_data, user_count ,pre_trained_word2vec, G, conte
 def main():
 
     #===========Load DataSet=============#
+    datafoler = "data/"
+    datasetname = ["store_tex.torchpickle", "store_apple.torchpickle", "store_math.torchpickle"]
     args = config_model
-    print("cuda : {}".format(args.cuda))
-    data = torch.load(args.data)
-    word2ix = data['dict']
-    G = data['G']
-    user_count = data['user_count']
-    love_list_count = []
-    # if args.is_classification is False:
-        # love_list_count = data['love_list_count']
-    content = torch.LongTensor(data['content']).to(args.device)
-    content_embed = ContentEmbed(content)
-    train_data, val_data= prepare_dataloaders(data, args, content_embed)
-    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-    model_name = args.model_name
-    #grid search
-    # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[128, 256],
-                   "lstm_num_layers":[1,2,3,4],
-                   "drop_out_lstm":[0.5],
-                    "lr":[1e-4, 1e-3, 1e-2],
-                    "margin":[0.1, 0.2, 0.3]
-                    }
-    pragram_list = grid_search(paragram_dic)
-    for paragram in pragram_list:
-        for key, value in paragram.items():
-            print("Key: {}, Value: {}".format(key, value))
-            setattr(args, key, value)
+    for datan in datasetname:
+        args.data = datafoler + datan
+        print("cuda : {}".format(args.cuda))
+        data = torch.load(args.data)
+        word2ix = data['dict']
+        G = data['G']
+        user_count = data['user_count']
+        love_list_count = []
+        # if args.is_classification is False:
+            # love_list_count = data['love_list_count']
+        content = torch.LongTensor(data['content']).to(args.device)
+        content_embed = ContentEmbed(content)
+        train_data, val_data= prepare_dataloaders(data, args, content_embed)
+        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+        model_name = args.model_name
+        print("[FILE] Data file {}".format(datan))
         train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_embed, love_list_count, model_name)
 if __name__ == '__main__':
     main()

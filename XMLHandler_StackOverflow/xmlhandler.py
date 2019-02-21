@@ -7,7 +7,7 @@ import os
 import numpy as np
 import collections
 from Config import config_data_preprocess
-
+import operator
 
 def debugTest(list_line):
     data = np.array(list_line)
@@ -75,13 +75,14 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     question = [line[0] for line in question_answer_user_vote]
     question_id_freq = list(zip(*np.unique(question, return_counts=True)))
     # remove question only have one answer
+
     print("[INFO] Question Answer pairs {}".format(len(question_answer_user_vote)))
     _index = 0
     t1 = 0
     question_dic = {}
     for id, freq in question_id_freq:
         #min question
-        if freq > 5:
+        if freq >= 5:
             assert id not in question_dic, "question unique function is not right"
             question_dic[id] = _index
             _index += 1
@@ -91,11 +92,12 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     print("[INFO]question more than 5 answers {}, and {} has less 5 answers".format(question_count,t1 ))
 
     user = np.array([line[2] for line in question_answer_user_vote if line[0] in question_dic])
-    user_id_ = np.unique(user)
-    user_length = len(user_id_)
+    user_id_unique = np.unique(user)
+
+    user_length = len(user_id_unique)
     print("[INFO] user count {}".format(user_length))
 
-    user_dic = {id: index for index, id in enumerate(user_id_)}
+    user_dic = {id: index for index, id in enumerate(user_id_unique)}
 
     answer = np.array([line[1] for line in question_answer_user_vote if line[0] in question_dic])
     answer_id = np.unique(answer)
@@ -119,11 +121,18 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
 
 
     one_answer_question_user = 0
+    ti = 0
+    content_pro = 0
     for user_id, context in user_context.items():
         try:
-            user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context]
+            user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context if i in answer_dic]
         except:
             one_answer_question_user += 1
+
+    assert  len(user_context_reorder) == len(user_dic), "length not equal {} != {}".format(len(user_context_reorder), len(user_dic))
+
+
+
     print("[INFO] {} user only answer question with one answer".format(one_answer_question_user))
     post_dic =  {**question_dic, **answer_dic}
     post_dic_sort = collections.OrderedDict(sorted(post_dic.items(), key=lambda x: x[1]))

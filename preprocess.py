@@ -12,6 +12,7 @@ from Config import config_data_preprocess
 from Util import createLogHandler
 from XMLHandler_StackOverflow import xmlhandler as stack_xmlhandler
 from XMLHandler_SemEval import xmlhandler as sem_xmlhandler
+from math import ceil
 
 
 def shrink_clean_text(content, max_sent_len):
@@ -47,6 +48,15 @@ def shrink_clean_text(content, max_sent_len):
               .format(trimmed_sent_count, max_sent_len))
 
     return word_insts
+
+def get_answer_user_dic(question_answer_user_vote):
+    return { line[1]:line[2] for line in question_answer_user_vote}
+
+def get_answer_vote(question_answer_user_vote):
+    vote_sort_by_answerid = sorted([(line[1], line[3]) for line in question_answer_user_vote], key=lambda x: x[0])
+    return np.array([di[1] for di in vote_sort_by_answerid])
+
+
 
 def build_vocab_idx(word_insts, min_word_count):
     ''' Trim vocab by number of occurence '''
@@ -86,50 +96,88 @@ def convert_instance_to_idx_seq(word_insts, word2idx):
     ''' Mapping words to idx sequence. '''
     return [[word2idx.get(w, Constants.UNK) for w in s] for s in word_insts]
 
+def train_test_split(train_per, question_count):
+    question_index = np.array(list(range(question_count)))
+    np.random.shuffle(question_index)
+    begin = int(train_per * question_count)
+    test_question = question_index[:begin]
+    train_questin = question_index[begin:]
+    return train_questin, test_question
 
+def question_answer_user_vote_split(question_answer_user_vote, train_question, test_question):
+    train = []
+    test = []
+    for line in question_answer_user_vote:
+        if line[0] in train_question:
+            train.append(line)
+        else:
+            test.append(line)
+    return train, test
 
-def GenerateGraph(question_answer_user_label, train_index, val_index):
-    train_data = question_answer_user_label[train_index]
-    val_data = question_answer_user_label[val_index]
-    G = nx.Graph()
-    t = [1 for i in question_answer_user_label if len(i) == 3]
-    ap = np.sum(t)
-    th = np.unique(np.array([np.array([t[0], t[1]]) for t in question_answer_user_label ]), axis=0)
-    th1 = np.unique(np.array([np.array([t[0], t[1]]) for t in question_answer_user_label]), axis=0)
-    th2 = np.unique(np.array([ np.array(line) for line in question_answer_user_label]), axis=0)
-    print("[INFO] unique question answer pair: {}, unique question answer user paris:{}, unique pairs {}".format(len(th), len(th1), len(th2)))
-    print("[INFO] No Vote Answer: {}, All Answer: {}".format(ap, len(question_answer_user_label)))
-    i = 0
-    for line in train_data:
+def GenerateGraph(train, test):
+    G = nx.MultiGraph()
+    for line in train:
         question = line[0]
         answer = line[1]
         user = line[2]
-        try:
-            label = line[3]
-        except:
-            # no vote
-            label = 0
-        G.add_node(question)
-        G.add_node(user)
-        G.add_edge(question, user, a_id=answer, score=label, train_removed=False)
-        i += 1
-    for line in val_data:
+        vote = line[3]
+
+        G.add_edge(question, user, a_id=answer, score=vote, train_removed=False)
+
+    for line in test:
+
         question = line[0]
         answer = line[1]
         user = line[2]
-        try:
-            label = line[3]
-        except:
-            # no vote
-            label = 0
-        G.add_node(question, type=0)
-        G.add_node(user, type=1)
-        G.add_edge(question, user, a_id=answer, score=label, train_removed=True)
-        i += 1
-    print("[INFO] Graph contains {} edge. QA pairs are {}, count is {}".format(len(G.edges()), len(question_answer_user_label), i))
-    print("[INFO] Connected components {}".format(number_connected_components(G)))
-    # print("[INFO] There are {} users, bigggest id is {}".format(len(set(user_list)), max(user_list)))
+        vote = line[3]
+
+        G.add_edge(question, user, a_id=answer, score=vote, train_removed=True)
+
+    print("[INFO] {} edge is Graph".format(len(G.edges())))
     return G
+
+
+
+
+
+    # for line in train_data:
+    #     question = line[0]
+    #     answer = line[1]
+    #     user = line[2]
+    #     try:
+    #         label = line[3]
+    #     except:
+    #         # no vote
+    #         label = 0
+    #     if G.has_edge(question, user) and G[user][question]['a_id'] != answer:
+    #         fuck += 1
+    #
+    #     G.add_node(question)
+    #     G.add_node(user)
+    #     G.add_edge(question, user, a_id=answer, score=label, train_removed=False)
+    #     i += 1
+    # for line in val_data:
+    #     question = line[0]
+    #     answer = line[1]
+    #     user = line[2]
+    #     try:
+    #         label = line[3]
+    #     except:
+    #         # no vote
+    #         label = 0
+    #     if G.has_edge(question, user) and G[user][question]['a_id'] != answer:
+    #         fuck += 1
+    #     G.add_node(question, type=0)
+    #     G.add_node(user, type=1)
+    #     G.add_edge(question, user, a_id=answer, score=label, train_removed=True)
+    #     i += 1
+    #
+    # print("[INFO] Graph contains {} edge. QA pairs are {}, count is {}".format(len(G.edges()), len(question_answer_user_label), i))
+    # print("[INFO] Connected components {}".format(number_connected_components(G)))
+    # print("[WARNNING] {} people have answered the same question for multiple times".format(fuck))
+    # exit()
+    # # print("[INFO] There are {} users, bigggest id is {}".format(len(set(user_list)), max(user_list)))
+    # return G
 
 def plot_G(G, user_count):
     user, question = graph_eval(G, user_count)
@@ -139,7 +187,6 @@ def plot_G(G, user_count):
 def main():
     ''' Main function '''
     config = config_data_preprocess
-    logger = createLogHandler(config.logger_name, config.log_file)
     title_world_list = []
     if config.is_classification is False:
         question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count=stack_xmlhandler.main(config.raw_data)
@@ -148,6 +195,7 @@ def main():
         question_answer_user_vote, body, user_context, user_count, question_count = sem_xmlhandler.main(config.raw_data)
     content_word_list = shrink_clean_text(body, config.max_len)
     question_answer_user_vote = np.array(question_answer_user_vote)
+    print("[INFO] {} line in question answer user vote".format(len(question_answer_user_vote)))
 
     # Build vocabulary
     word2idx = build_vocab_idx(content_word_list + title_world_list, config.min_word_count)
@@ -156,35 +204,37 @@ def main():
     if config.is_classification is False:
         title_id = convert_instance_to_idx_seq(title_world_list, word2idx)
         info_title = convert_instance_to_idx_seq(title_id, word2idx)
-        logger.info('Title length information: {}'.format(info_title))
+        print('Title length information: {}'.format(len(info_title)))
 
     word_id = convert_instance_to_idx_seq(content_word_list, word2idx)
     info_content = content_len_statics(word_id)
-    logger.info('Content length infomation: {}'.format(info_content))
+    print('Content length infomation: {}'.format(info_content))
     #split train-valid-test dataset
 
-    index = np.arange(len(question_answer_user_vote))
-    np.random.shuffle(index)
-    length = len(question_answer_user_vote)
-    train_end = int(config.train_size * length)
-    train_index = index[:train_end]
-    test_index = index[train_end:]
 
-    G = GenerateGraph(question_answer_user_vote, train_index, test_index)
+    train_question, test_question= train_test_split(config.train_per, question_count)
+    train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
+
+    G = GenerateGraph(train_data, test_data)
 
     # plot degree distribution of the graph
     plot_G(G, user_count)
 
+
+    answer_user_dic = get_answer_user_dic(question_answer_user_vote)
+    vote_sort_by_answerid = get_answer_user_dic(question_answer_user_vote)
     data = {
         'settings': config,
         'dict': word2idx,
         'content': word_id,
-        'question_answer_user_train': question_answer_user_vote[train_index],
-        'question_answer_user_test': question_answer_user_vote[test_index],
+        'question_answer_user_train': train_data,
+        'question_answer_user_test': test_data,
         'G': G,
         'user_count': user_count,
         'question_count': question_count,
-        'user_context':user_context
+        'user_context':user_context,
+        'answer_user_dic':answer_user_dic,
+        'vote_sort': vote_sort_by_answerid
     }
     if config.is_classification is False:
         data["title"] = title_id

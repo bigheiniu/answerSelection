@@ -108,6 +108,7 @@ def idReorder(question_answer_user_label, content, user_context):
         question_answer_user_label[line_index][0] = question_dic[question[line_index]] + user_count
         question_answer_user_label[line_index][1] = answer_dic[answer[line_index]] + user_count
         question_answer_user_label[line_index][2] = user_dic[user[line_index]]
+
     for user_id, context in user_context.items():
         user_context_reorder[user_dic[user_id]] = [answer_dic[i] for i in context]
 

@@ -8,14 +8,14 @@ class config_data_preprocess:
     min_word_count = 5
 
     #split data into train and test data
-    train_size = 0.6
-    test_size = 0.4
+    train_per = 0.75
+    test_per = 0.25
 
     # location store the raw data
     raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/apple"
 
     # store preprocessed data
-    save_data = "data/store_apple.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    save_data = "data/apple.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     log_file = "text_log/preprocess.log"
     logger_name = "preprocess"
     max_love_count = 10
@@ -23,19 +23,20 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = False
-    cuda = False
-    model_name = "CNTN"
+    DEBUG = True
+    cuda = True
+    model_name = "Hybrid"
     is_classification = False
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 
 
 
+    neg_size = 1
     #basic setting
     epoch = 100
     log = None
-    batch_size = 8
+    batch_size = 1
     num_class = 2 if is_classification else 1
 
 

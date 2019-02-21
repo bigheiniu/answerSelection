@@ -90,7 +90,11 @@ class HybridAttentionLayer(nn.Module):
         if(is_user == 2):
             # content1: user vector
             # content2: question vector
-            content1 = content1.unsqueeze(1).expand(-1, self.args.max_q_len, -1)
+            try:
+                shape = content1.shape
+                content1 = content1.unsqueeze(1).expand(-1, self.args.max_q_len, -1)
+            except:
+                t =1
             m = torch.tanh(self.w_q_m(content1) + self.w_a_m(content2) + self.w_aq_m(content1 * content2))
             lambda_ = F.softmax(self.w_2_v(m).squeeze(), dim=-1)
             attention_pa = lambda_

@@ -9,7 +9,51 @@ from sklearn.model_selection import train_test_split
 import collections
 import matplotlib.pyplot as plt
 import logging
+import torch.nn.functional as F
+from sklearn.model_selection import ParameterGrid
 
+
+class PairWiseHingeLoss(nn.Module):
+    def __init__(self, margin):
+        super(PairWiseHingeLoss, self).__init__()
+        self.margin = margin
+
+    def forward(self, postive_score, negative_score):
+        loss_hinge = torch.mean(F.relu(self.margin - postive_score + negative_score))
+        return loss_hinge
+
+
+def grid_search(params_dic):
+    '''
+    :param params_dic: similar to {"conv_size":[0,1,2], "lstm_hiden_size":[1,2,3]}
+    :return: iter {"conv_size":1, "lstm_hidden_size":1}
+    '''
+    grid_parameter = ParameterGrid(params_dic)
+    parameter_list = []
+    for params in grid_parameter:
+        params_dic_result = {}
+        for key in params_dic.keys():
+            params_dic_result[key] = params[key]
+        parameter_list.append(params_dic_result)
+    return parameter_list
+
+
+def diversity_evaluation(diversity_answer_recommendation, topK, tfidf, lda):
+    #init evaluate class
+    tf_idf_score = 0
+    lda_score = 0
+    question_count = len(diversity_answer_recommendation)
+    for candidate_answer_list in diversity_answer_recommendation:
+        candidate_word_space = []
+        top_word_space = []
+        for answer_content in candidate_answer_list:
+            candidate_word_space += answer_content.tolist()
+        for top_answer_content in candidate_answer_list[:topK]:
+            top_word_space += top_answer_content.tolist()
+
+        tf_idf_score += tfidf.simiarity(candidate_word_space, top_word_space)
+        lda_score += lda.similarity(candidate_word_space, top_word_space)
+    return (tf_idf_score * 1.0) / question_count, (lda_score * 1.0) / question_count
 
 class LSTM(nn.Module):
     def __init__(self, args):

@@ -8,15 +8,13 @@ Convolutional Neural Tensor Network Architecture for Community-based Question An
 
 '''
 class CNTN(nn.Module):
-    def __init__(self, args, word2_vec, Content_embed, user_count):
+    def __init__(self, args, word2_vec):
         super(CNTN, self).__init__()
         self.args = args
         self.word_embedding = nn.Embedding.from_pretrained(word2_vec)
         # input channels and output channels are the same
         self.cnn_lr = nn.Conv2d(1, args.k_max_s, (3, args.embed_size))
         # self.cnn_list = [nn.Conv2d(1, 1, kernel_size).to(self.args.device) for kernel_size in self.args.cntn_kernel_size]
-        self.Content_emebd = Content_embed
-        self.user_count = user_count
 
         self.bilinear_M = nn.Bilinear(self.args.k_max_s, self.args.k_max_s, self.args.cntn_feature_r)
         self.linear_V = nn.Linear(2 * args.k_max_s, self.args.cntn_feature_r, bias=False)
@@ -26,19 +24,15 @@ class CNTN(nn.Module):
         # nn.init.xavier_normal_(self.linear_V.weight)
         # nn.init.xavier_normal_(self.linear_U.weight)
 
-    def forward(self, question, answer_list, _, need_feature=False):
+    def forward(self, question, answer):
 
-        question_embed = self.word_embedding(self.Content_emebd.content_embed(question - self.user_count))
+        question_embed = self.word_embedding(question)
         question_embed.unsqueeze_(1)
-        answer_embed = self.word_embedding(self.Content_emebd.content_embed(answer_list - self.user_count))
+        answer_embed = self.word_embedding(answer)
         answer_embed.unsqueeze_(1)
-        question_length = question_embed.shape[-2]
-        answer_length = answer_embed.shape[-2]
 
-        #
-        #
         question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
-        answer_cnn,_ = torch.max(self.cnn_lr(answer_embed), dim=-2)
+        answer_cnn, _ = torch.max(self.cnn_lr(answer_embed), dim=-2)
 
         # cnn_count = len(self.cnn_list)
         # for depth, cnn in enumerate(self.cnn_list):
@@ -79,13 +73,10 @@ class CNTN(nn.Module):
             score_log_softmax = F.log_softmax(score, dim=-1)
             score_soft_max = F.softmax(score, dim=-1)
             predict = torch.argmax(score_soft_max, dim=-1)
+            score_soft_max = score_soft_max[:,1]
             return_list = [score_log_softmax, score_soft_max, predict]
         else:
             return_list = [score]
-        if need_feature:
-            answer_vec = answer_cnn.detach()
-            # answer_vec = answer_embed.detach()
-            return_list.append(answer_vec)
         return tuple(return_list)
 
 

@@ -21,7 +21,7 @@ def debugTest(list_line):
 def reorde_lover_dic(love_dic, user_dic, max_love_count, user_count):
     love_list = []
     user_dic_sorted = collections.OrderedDict(sorted(user_dic.items(), key=lambda x: x[1]))
-
+    #TODO: Using sparse matrix for user followship
     for user_id, user_index in user_dic_sorted.items():
         # assert user_index == len(love_list), "Love dic is wrong"
         th = []
@@ -36,6 +36,7 @@ def reorde_lover_dic(love_dic, user_dic, max_love_count, user_count):
                 pass
         love_list.append(th)
     love_count = [len(love_users) if len(love_users) < max_love_count else max_love_count for love_users in love_list ]
+    love_count = [max_love_count if i == 0 else i for i in love_count]
     shrink_love_list = []
     for love_users in love_list:
         if len(love_users) > max_love_count:

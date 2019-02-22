@@ -9,10 +9,9 @@ class HybridAttentionModel(nn.Module):
     '''
     word_embedding -> lstm -> self attention -> hybrid attention
     '''
-    def __init__(self, args, pretrain_embed, user_count):
+    def __init__(self, args, pretrain_embed):
         super(HybridAttentionModel, self).__init__()
         self.args = args
-        self.user_count = user_count
         self.embed_size = args.embed_size
         self.lstm_hidden_size = args.lstm_hidden_size
 
@@ -53,7 +52,7 @@ class HybridAttentionModel(nn.Module):
         return hiddena, hiddenb
 
 
-    def forward(self, question, answer, user_context, need_feature=False):
+    def forward(self, question, answer, user_context):
         '''
 
         :param question: N * L_q
@@ -113,11 +112,9 @@ class HybridAttentionModel(nn.Module):
             score_log_softmax = F.log_softmax(score, dim=-1)
             score_soft_max = F.softmax(score, dim=-1)
             _, predict = score_soft_max.max(-1)
+            score_soft_max = score_soft_max[:,1]
             return_list = [score_log_softmax, score_soft_max, predict]
         else:
             return_list = [score]
 
-        if need_feature:
-            answer_vec = a_h_new.detach()
-            return_list.append(answer_vec)
         return tuple(return_list)

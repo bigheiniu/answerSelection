@@ -242,6 +242,7 @@ def main():
         data["title"] = title_id
         data["love_list_count"] = love_list_count
     else:
+        data["love_list_count"] = [[],[]]
         config.save_data="data/store_SemEval.torchpickle"
     print("Dumping the processed data to pickle file: {}".format(config.save_data))
     torch.save(data, config.save_data)

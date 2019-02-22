@@ -3,7 +3,7 @@ class config_data_preprocess:
 
     #max length of a post
     max_len = 100
-    is_classification = False
+    is_classification = True
     #remove word that frequecy less than
     min_word_count = 5
 
@@ -24,15 +24,19 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = True
+    cuda = False
+    device = torch.device('cuda' if cuda else 'cpu')
     model_name = "Hybrid"
-    is_classification = False
+    is_classification = True
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 
 
-
+    #dataset
     neg_size = 1
+
+
+
     #basic setting
     epoch = 100
     log = None
@@ -40,7 +44,7 @@ class config_model:
     num_class = 2 if is_classification else 1
 
 
-    device = torch.device('cuda' if cuda else 'cpu' )
+
     #path to store data
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     data = "data/store_stackoverflow_datascience.torchpickle"
@@ -74,7 +78,8 @@ class config_model:
     #LSTM setting
     #================
 
-    lstm_hidden_size = 128
+    #128
+    lstm_hidden_size = 4
     lstm_num_layers = 2
     drop_out_lstm = 0.3
     bidirectional = False
@@ -84,8 +89,8 @@ class config_model:
     #============
     #evaluate settings
     #============
-    # rank or classification
-
+    precesion_at_k = 1
+    ndcg_k = 2
 
     #diversity setting
     use_dpp = False
@@ -99,8 +104,8 @@ class config_model:
     # location to store or load model
     cov_model_path = "result"
 
-    #Rank evaluate setting
-    ndcg_k = 2
+    # #Rank evaluate setting
+    # ndcg_k = 2
 
     #hinge loss margin
     margin = 0.1

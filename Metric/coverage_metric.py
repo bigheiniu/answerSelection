@@ -29,6 +29,8 @@ import itertools
 class TFIDFSimilar:
     def __init__(self, background_data, load_pretrain, model_path ):
         file_name = "tfidf.model"
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
         model_path = os.path.join(model_path, file_name)
         if load_pretrain:
             self.tfModel = self.loadModel(model_path)
@@ -80,7 +82,8 @@ class TFIDFSimilar:
 class LDAsimilarity:
     def __init__(self, background_data, topic_count, load_pretrain, model_path):
         file_name = "lda.model"
-
+        if not os.path.exists(model_path):
+            os.makedirs(model_path)
         model_path = os.path.join(os.path.abspath(model_path), file_name)
         if load_pretrain:
             self.lda = self.loadModel(model_path)
@@ -92,7 +95,7 @@ class LDAsimilarity:
     def list2tuple(self, data_list):
         data_list = np.array(data_list)
         y = np.bincount(data_list)
-        ii = np.nonzero(y)[0]
+        ii = (np.nonzero(y))[0]
         return list(zip(ii, y[ii]))
 
     def saveModel(self, path):

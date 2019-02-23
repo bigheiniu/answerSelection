@@ -96,21 +96,20 @@ class classifyDataSetEdge(data.Dataset):
     def __init__(self,
                  G,
                  args,
-                 question_id_list,
                  is_training=True
                  ):
         self.G = G
         self.args = args
-        self.question_id_list = question_id_list
         self.is_training = is_training
         self.edges = self.edgeGenre()
 
     def edgeGenre(self):
         edges = []
         for edge in self.G.edges(data=True):
-            if self.is_training and ~edge['train_removed']:
+            train_removed = edge[2]['train_removed']
+            if self.is_training and ~train_removed:
                 edges.append(edge)
-            elif ~self.is_training and edge['train_removed']:
+            elif ~self.is_training and train_removed:
                 edges.append(edge)
         return edges
 
@@ -122,16 +121,15 @@ class classifyDataSetEdge(data.Dataset):
         questionId = edge[0] if edge[0] > edge[1] else edge[1]
         userId = edge[1] if edge[0] > edge[1] else edge[0]
 
-        answerId = edge['a_id']
-        label = edge['score']
-        return questionId, answerId, userId, label, questionId
+        answerId = edge[2]['a_id']
+        label = edge[2]['score']
+        return questionId, answerId, userId, label
 
 class rankDataSetEdge(data.Dataset):
     def __init__(self,
                  G,
                  args,
                  answer_score,
-                 question_id_list,
                  question_count,
                  user_count,
                  answer_user_dic,
@@ -139,7 +137,6 @@ class rankDataSetEdge(data.Dataset):
                  ):
         self.G = G
         self.args = args
-        self.question_id_list = question_id_list
         self.is_training = is_training
         self.user_count = user_count
         self.question_count = question_count
@@ -151,9 +148,10 @@ class rankDataSetEdge(data.Dataset):
     def edgeGenre(self):
         edges = []
         for edge in self.G.edges(data=True):
-            if self.is_training and ~edge['train_removed']:
+            train_removed = edge[2]['train_removed']
+            if self.is_training and train_removed:
                 edges.append(edge)
-            elif ~self.is_training and edge['train_removed']:
+            elif ~self.is_training and train_removed:
                 edges.append(edge)
         return edges
 
@@ -180,16 +178,16 @@ class rankDataSetEdge(data.Dataset):
         questionId = edge[0] if edge[0] > edge[1] else edge[1]
         userId = edge[1] if edge[0] > edge[1] else edge[0]
 
-        answerId = edge['a_id']
-        score = edge['score']
+        answerId = edge[2]['a_id']
+        score = edge[2]['score']
         if self.is_training:
             neg_ans = self.negative_sampling(answerId)
             neg_user = self.answer_user_dic[neg_ans]
 
-            return questionId, userId, score, neg_ans, neg_user
+            return questionId, answerId, userId, score, neg_ans, neg_user
 
         else:
-            return questionId, userId, score
+            return questionId, answerId, userId, score
 
 class classifyDataOrdinary(data.Dataset):
     def __init__(self,

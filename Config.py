@@ -23,7 +23,7 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = False
+    DEBUG = True
     cuda = False
     device = torch.device('cuda' if cuda else 'cpu')
     model_name = "Hybrid"
@@ -47,8 +47,10 @@ class config_model:
 
     #path to store data
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
-    data = "data/store_stackoverflow_datascience.torchpickle"
+    # data = "data/store_stackoverflow_datascience.torchpickle"
     # data = "/home/yichuan/course/induceiveAnswer/data/store_SemEval.torchpickle"
+    data = "data/store_SemEval.torchpickle"
+
     #=====================
     #content_data setting
     #====================

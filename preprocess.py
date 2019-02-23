@@ -116,7 +116,7 @@ def question_answer_user_vote_split(question_answer_user_vote, train_question, t
     return train, test
 
 def GenerateGraph(train, test):
-    G = nx.MultiGraph()
+    G = nx.Graph()
     for line in train:
         question = line[0]
         answer = line[1]
@@ -225,7 +225,6 @@ def main():
     answer_user_dic = get_answer_user_dic(question_answer_user_vote)
     vote_sort_by_answerid = get_answer_vote(question_answer_user_vote)
     data = {
-        'hello': "you",
         'settings': config,
         'dict': word2idx,
         'content': word_id,

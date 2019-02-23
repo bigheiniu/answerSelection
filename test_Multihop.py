@@ -228,11 +228,10 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
 
     model.to(args.device)
     #load coverage model
-    if ~args.is_classification:
-        tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
-        lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, args.cov_model_path)
-    if args.cov_pretrain is False:
-        args.cov_pretrain = True
+    if args.is_classification is False:
+        cov_model_path = args.cov_model_path + "MultiHop"
+        tfidf = TFIDFSimilar(content, False, cov_model_path)
+        lda = LDAsimilarity(content, args.lda_topic, False, cov_model_path)
     info_val = {}
 
     for epoch_i in range(args.epoch):
@@ -260,7 +259,8 @@ def main():
 
     #===========Load DataSet=============#
     datafoler = "data/"
-    datasetname = ["store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
+    #"store_SemEval.torchpickle",
+    datasetname = [ "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.is_classification = True if "SemEval" in datan else False

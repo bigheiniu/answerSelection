@@ -221,9 +221,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
 
     if args.is_classification:
-        mAP = mAP*1.0 / question_count
-        p_at_one = p_at_one*1.0 / question_count
-        mRP = mRP *1.0 / question_count
+        mAP = mAP* 1.0 / question_count
+        p_at_one = p_at_one * 1.0 / question_count
+        mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
         # visualize the data
         info_test['mAP'] = mAP
@@ -262,15 +262,15 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
 
     model.to(args.device)
     #load coverage model
-    tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
-    lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, args.cov_model_path)
-    if args.cov_pretrain is False:
-        args.cov_pretrain = True
+    if args.is_classification is False:
+        cov_model_path = args.cov_model_path + "Hybrid"
+        tfidf = TFIDFSimilar(content, False, cov_model_path)
+        lda = LDAsimilarity(content, args.lda_topic, False, cov_model_path)
     info_val = {}
 
     for epoch_i in range(args.epoch):
 
-        # train_epoch(model, train_data, optimizer, args, epoch_i)
+        train_epoch(model, train_data, optimizer, args, epoch_i)
 
         diversity_answer_recommendation = eval_epoch(model, val_data, args, eval_epoch_count)
         if args.is_classification is False:
@@ -288,7 +288,8 @@ def main():
 
     #===========Load DataSet=============#
     datafoler = "data/"
-    datasetname = ["store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
+    #"store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle",
+    datasetname = ["math.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.is_classification = True if "SemEval" in datan else False

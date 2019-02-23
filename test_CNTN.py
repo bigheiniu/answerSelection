@@ -138,7 +138,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
 
 
 
-def eval_epoch(model, data, args, eval_epoch_count):
+def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
     model.eval()
     diversity_answer_recommendation = []
     questionid_answer_score_gt_dic = {}
@@ -196,7 +196,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
     mRP = 0
     p_at_one = 0
     ndcg_loss = 0
-
+    tf_idf_score = 0
+    lda_score = 0
     for _, values in questionid_answer_score_gt_dic.items():
         #biggest in the begining
         answer_score_gt_reorder = sorted(values, key=lambda x: -x[-2])
@@ -207,7 +208,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
            p_at_one += precision_at_k([rank_gt], args.precesion_at_k)
         else:
             rank_answer_content = [line[0] for line in answer_score_gt_reorder]
-            diversity_answer_recommendation.append(rank_answer_content)
+            tfidf_cov, lda_cov = diversity_evaluation([rank_answer_content], args.div_topK, tfidf_model, lda_model)
+            tf_idf_score += tfidf_cov
+            lda_score += lda_cov
             ndcg_loss += ndcg_at_k(rank_gt, args.ndcg_k)
             if np.argmax(rank_gt) == 0:
                 p_at_one += 1
@@ -231,9 +234,13 @@ def eval_epoch(model, data, args, eval_epoch_count):
     else:
         p_at_one = p_at_one * 1.0 / question_count
         ndcg_loss = ndcg_loss * 1.0 / question_count
+        lda_score = lda_score * 1.0 / question_count
+        tf_idf_score = tf_idf_score * 1.0 / question_count
         info_test['nDCGG'] = ndcg_loss
         info_test['P@1'] = p_at_one
-        print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}".format(ndcg_loss, p_at_one))
+        info_test['lda'] = lda_score
+        info_test['tfidf'] = tf_idf_score
+        print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}, lda score is {}, tf_idf score is {}".format(ndcg_loss, p_at_one, lda_score, tf_idf_score))
 
     eval_epoch_count += 1
 
@@ -244,35 +251,25 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-
-
-
-
-
-
 def train(args, train_data, val_data ,pre_trained_word2vec, content):
     model = CNTN_Model.CNTN(args, pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
     #load coverage model
-    tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
-    lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, args.cov_model_path)
-    if args.cov_pretrain is False:
-        args.cov_pretrain = True
+    lda=None
+    tfidf=None
+    if args.is_classification is False:
+        cov_model_path = args.cov_model_path +  "CNTN"
+        tfidf = TFIDFSimilar(content, args.cov_pretrain, cov_model_path)
+        lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, cov_model_path)
     info_val = {}
 
     for epoch_i in range(args.epoch):
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, eval_epoch_count)
-        if args.is_classification is False:
-            tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, args.div_topK, tfidf, lda)
-
-            info_val['tfidf_cov'] = tfidf_cov
-            info_val['lda_cov'] = lda_cov
-            print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
+        eval_epoch(model, val_data, args, eval_epoch_count, tfidf_model=tfidf, lda_model=lda)
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
 
@@ -282,10 +279,13 @@ def main():
 
     #===========Load DataSet=============#
     datafoler = "data/"
-    datasetname = ["store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
+    #"store_SemEval.torchpickle","tex.torchpickle", "apple.torchpickle",
+
+    datasetname = [ "math.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.is_classification = True if "SemEval" in datan else False
+        args.num_class = 2 if args.is_classification else 1
         args.data = datafoler + datan
         print("[FILE] Data file {}".format(datan))
         print("cuda : {}".format(args.cuda))
@@ -295,5 +295,6 @@ def main():
         train_data, val_data = prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
         train(args, train_data, val_data, pre_trained_word2vec, content)
+        args.cov_pretrain = False
 if __name__ == '__main__':
     main()

@@ -203,12 +203,10 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content, love_list_c
 
     model.to(args.device)
     #load coverage model
-    if ~args.is_classification:
-        tfidf = TFIDFSimilar(content, args.cov_pretrain, args.cov_model_path)
-        lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, args.cov_model_path)
-
-    if args.cov_pretrain is False:
-        args.cov_pretrain = True
+    if args.is_classification is False:
+        cov_model_path = args.cov_model_path + "AMRNL"
+        tfidf = TFIDFSimilar(content, False, cov_model_path)
+        lda = LDAsimilarity(content, args.lda_topic, False, cov_model_path)
     info_val = {}
     diversity_answer_recommendation = []
     for epoch_i in range(args.epoch):

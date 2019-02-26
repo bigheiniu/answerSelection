@@ -23,8 +23,8 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = True
-    cuda = False
+    DEBUG = False
+    cuda = True
     device = torch.device('cuda' if cuda else 'cpu')
     model_name = "Hybrid"
     is_classification = True
@@ -67,6 +67,7 @@ class config_model:
     # learning rate
     lr = 0.001
 
+
     #======================
     #word embedding setting
     #======================
@@ -81,7 +82,7 @@ class config_model:
     #================
 
     #128
-    lstm_hidden_size = 4
+    lstm_hidden_size = 128
     lstm_num_layers = 2
     drop_out_lstm = 0.3
     bidirectional = False
@@ -148,3 +149,7 @@ class config_model:
     #=============
     hy_in_channels = 1
 
+    #============
+    #AILSTM
+    #============
+    question_topic_embed_size = 20

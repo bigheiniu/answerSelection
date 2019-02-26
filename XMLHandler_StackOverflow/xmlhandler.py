@@ -72,7 +72,6 @@ def content_evaluation(content_kind, content_id_list, content):
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context, love_dic, max_love_count=config_data_preprocess.max_love_count):
     user_context_reorder = {}
 
-
     question = [line[0] for line in question_answer_user_vote]
     question_id_freq = list(zip(*np.unique(question, return_counts=True)))
     # remove question only have one answer

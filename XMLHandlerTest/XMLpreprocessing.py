@@ -43,9 +43,7 @@ def parse(xmlfile, content_id, user_dic, user_context):
                 test_q_id = test_q_id[0] + "_" + test_q_id[1]
             assert q_Id_formal == test_q_id, "[ERROR] question id {} conliction {} in {}".format(q_Id_formal, test_q_id, xmlfile)
             a_user_Id = relcomment.attrib["RELC_USERID"]
-            user_name = relcomment.attrib["RELC_USERNAME"]
-            # if a_user_Id == "U2" or user_name == "anonymous":
-            #     continue
+
             if a_user_Id not in user_dic:
                 user_dic[a_user_Id] = len(user_dic)
             a_user_Id = user_dic[a_user_Id]
@@ -60,7 +58,6 @@ def parse(xmlfile, content_id, user_dic, user_context):
 
             if relcomment.find("RelCClean") is not None:
                 answer_content = relcomment.find("RelCClean").text
-
             elif relcomment.find("RelCText") is not None:
                 answer_content = relcomment.find("RelCText").text
             else:

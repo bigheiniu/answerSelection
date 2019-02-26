@@ -4,7 +4,7 @@
 
 from XMLHandler_SemEval.XMLpreprocessing import parse
 import os
-import  numpy as np
+import numpy as np
 import collections
 
 
@@ -87,10 +87,8 @@ def content_evaluation(content_kind, content, content_id_list):
 
 def idReorder(question_answer_user_label, content, user_context):
     user_context_reorder = {}
-    #old version no duplicate user remove
     user= np.array([line[2] for line in question_answer_user_label])
     user_id = np.unique(user)
-
     print("[INFO] Semival Question Answer Pairs: {}".format(len(question_answer_user_label)))
     print("[INFO] Semival User Count {}".format(len(user_id)))
     user_count = len(user_id)
@@ -134,7 +132,7 @@ def read_xml_data(path):
     # hanle all the data under v3.2
     # for easy handle, we will read all the data and then random split data into "train, val, test"
     sub_dirs = os.listdir(path)
-    sub_dirs = [os.path.join(path, dir) for dir in sub_dirs if os.path.isdir(os.path.join(path, dir))]
+    sub_dirs = [os.path.join(path,dir) for dir in sub_dirs if os.path.isdir(os.path.join(path,dir))]
     content = []
     question_answer_user_label = []
     content_id = 0
@@ -143,16 +141,12 @@ def read_xml_data(path):
     for sub_dir in sub_dirs:
         print(sub_dir)
         for file in os.listdir(sub_dir):
-            if "xml" in file and ("subtaskA" in file or "subtaskA" in sub_dir) and ("multiline" not in sub_dir):
-
-                file = os.path.join(sub_dir, file)
-                print(file)
-                content_file, question_answer_user_label_file, user_dic, content_id, user_context = parse(file,
-                                                                                                      user_dic=user_dic,
-                                                                                                      content_id=content_id,
-                                                                                                      user_context=user_context)
-                content += content_file
-                question_answer_user_label += question_answer_user_label_file
+            if "xml" not in file or "subtaskA" not in file:
+                continue
+            file = os.path.join(sub_dir, file)
+            content_file, question_answer_user_label_file, user_dic, content_id, user_context = parse(file, user_dic=user_dic, content_id=content_id, user_context=user_context)
+            content += content_file
+            question_answer_user_label += question_answer_user_label_file
 
     return content, question_answer_user_label, user_context
 

@@ -43,7 +43,7 @@ def prepare_dataloaders(data, args):
                 is_training=True,
                 user_count=user_count,
                 answer_score=answer_score,
-                content = content_embed,
+                content_embed= content_embed,
                 question_count=question_count,
                 answer_user_dic=answer_user_dic,
                 is_hybrid=False
@@ -59,7 +59,7 @@ def prepare_dataloaders(data, args):
                 args=args,
                 question_answer_user_vote=test_data,
                 is_training=False,
-                content=content_embed,
+                content_embed=content_embed,
                 user_count=user_count,
                 question_count=question_count,
                 is_hybrid=False

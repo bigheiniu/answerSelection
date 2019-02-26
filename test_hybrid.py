@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_map')
+logger = Logger('./logs_hybrid')
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -42,9 +42,10 @@ def prepare_dataloaders(data, args):
             classifyDataSetUserContext(
                            args=args,
                         question_answer_user_vote=train_data,
-                        content=content_embed,
+                        content_embed=content_embed,
                         user_count=user_count,
-                        user_context=user_context
+                        user_context=user_context,
+                        is_hybrid=True
                        ),
         num_workers=4,
         batch_size=args.batch_size,
@@ -56,9 +57,10 @@ def prepare_dataloaders(data, args):
         classifyDataSetUserContext(
             args=args,
             question_answer_user_vote=test_data,
-            content=content_embed,
+            content_embed=content_embed,
             user_count=user_count,
-            user_context=user_context
+            user_context=user_context,
+            is_hybrid=True
         ),
         num_workers=4,
         batch_size=args.batch_size,
@@ -73,10 +75,11 @@ def prepare_dataloaders(data, args):
                 is_training=True,
                 user_count=user_count,
                 answer_score=answer_score,
-                content = content_embed,
+                content_embed= content_embed,
                 question_count=question_count,
                 answer_user_dic=answer_user_dic,
-                user_context=user_context
+                user_context=user_context,
+                is_hybrid=True
             ),
             num_workers=4,
             batch_size=args.batch_size,
@@ -89,10 +92,11 @@ def prepare_dataloaders(data, args):
                 args=args,
                 question_answer_user_vote=test_data,
                 is_training=False,
-                content=content_embed,
+                content_embed=content_embed,
                 user_count=user_count,
                 question_count=question_count,
-                user_context=user_context
+                user_context=user_context,
+                is_hybrid=False
             ),
             num_workers=4,
             batch_size=args.batch_size,
@@ -108,13 +112,15 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
-
+    loss1 = 0
+    line = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
         if args.is_classification:
             q_iter, a_iter, ut_iter, gt_iter, _ = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
+            line += args.batch_size
             optimizer.zero_grad()
             result = model(q_iter, a_iter, ut_iter)[0]
             loss = loss_fn(result, gt_iter)
@@ -127,14 +133,16 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             score_neg = model(question_list, answer_neg_list, user_neg_context)[0]
             loss = torch.sum(loss_fn(score_pos, score_neg))
 
-        logger.scalar_summary("train_loss", loss.item(), train_epoch_count)
+        # logger.scalar_summary("train_loss", loss.item(), train_epoch_count)
+        loss1 += loss.item()
         loss.backward()
         optimizer.step()
 
+
     train_epoch_count += 1
 
-
-
+    loss = loss / line
+    logger.scalar_summary("train_loss", loss, train_epoch_count)
     for tag, value in model.named_parameters():
         if value.grad is None:
             continue
@@ -153,6 +161,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
     one_count = 0
     zero_count = 0
     line_count = 0
+    loss_fn = nn.NLLLoss()
+    loss = 0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -164,7 +174,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 line_count += args.batch_size
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
-                _, score, predic = model(q_val, a_val, u_val)
+                log_softmax, score, predic = model(q_val, a_val, u_val)
+                loss += loss_fn(log_softmax, gt_val).item()
                 score = tensorTonumpy(score, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(question_id_list, args.cuda)
@@ -225,6 +236,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         p_at_one = p_at_one * 1.0 / question_count
         mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
+        loss = loss / line_count
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
@@ -232,7 +244,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
         info_test['accuracy'] = accuracy
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, one_count, zero_count))
+        info_test['eval_loss'] =  loss
+        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -272,7 +285,7 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, eval_epoch_count)
+        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
         if args.is_classification is False:
             tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, args.div_topK, tfidf, lda)
 
@@ -280,7 +293,7 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
             info_val['lda_cov'] = lda_cov
             print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
         for tag, value in info_val.items():
-            logger.scalar_summary(tag, value, eval_epoch_count)
+            logger.scalar_summary(tag, value, epoch_i)
 
 
 
@@ -289,18 +302,33 @@ def main():
     #===========Load DataSet=============#
     datafoler = "data/"
     #"store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle",
-    datasetname = ["math.torchpickle"]
+    datasetname = ["store_SemEval.torchpickle"]
     args = config_model
     for datan in datasetname:
-        args.is_classification = True if "SemEval" in datan else False
         args.data = datafoler + datan
         print("[FILE] Data file {}".format(datan))
         print("cuda : {}".format(args.cuda))
         data = torch.load(args.data)
         word2ix = data['dict']
         content = data['content']
+        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(
+            args.device)
         train_data, val_data = prepare_dataloaders(data, args)
-        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        train(args, train_data, val_data, pre_trained_word2vec, content)
+
+        args.is_classification = True if "SemEval" in datan else False
+        paragram_dic = {"lstm_hidden_size": [128, 256],
+                        "lstm_num_layers": [1, 2, 3, 4],
+                        "drop_out_lstm": [0.3, 0.5],
+                        "lr": [1e-4, 1e-3, 1e-2],
+                        # "margin": [0.1, 0.2, 0.3]
+                        }
+        pragram_list = grid_search(paragram_dic)
+        for paragram in pragram_list:
+            for key, value in paragram.items():
+                print("Key: {}, Value: {}".format(key, value))
+                setattr(args, key, value)
+
+
+            train(args, train_data, val_data, pre_trained_word2vec, content)
 if __name__ == '__main__':
     main()

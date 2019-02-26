@@ -13,12 +13,13 @@ class CNTN(nn.Module):
         self.args = args
         self.word_embedding = nn.Embedding.from_pretrained(word2_vec)
         # input channels and output channels are the same
-        self.cnn_lr = nn.Conv2d(1, args.k_max_s, (3, args.embed_size))
+        self.cnn_lr = nn.Conv2d(1, args.lstm_hidden_size, (3, args.embed_size))
         # self.cnn_list = [nn.Conv2d(1, 1, kernel_size).to(self.args.device) for kernel_size in self.args.cntn_kernel_size]
 
-        self.bilinear_M = nn.Bilinear(self.args.k_max_s, self.args.k_max_s, self.args.cntn_feature_r)
-        self.linear_V = nn.Linear(2 * args.k_max_s, self.args.cntn_feature_r, bias=False)
+        self.bilinear_M = nn.Bilinear(self.args.lstm_hidden_size, self.args.lstm_hidden_size, self.args.cntn_feature_r)
+        self.linear_V = nn.Linear(2 * args.lstm_hidden_size, self.args.cntn_feature_r, bias=False)
         self.linear_U = nn.Linear(self.args.cntn_feature_r, self.args.num_class, bias=False)
+        self.bn = nn.BatchNorm1d(self.args.lstm_hidden_size)
 
         # nn.init.xavier_normal_(self.bilinear_M.weight)
         # nn.init.xavier_normal_(self.linear_V.weight)
@@ -31,8 +32,10 @@ class CNTN(nn.Module):
         answer_embed = self.word_embedding(answer)
         answer_embed.unsqueeze_(1)
 
-        question_cnn, _ = torch.max(self.cnn_lr(question_embed), dim=-2)
-        answer_cnn, _ = torch.max(self.cnn_lr(answer_embed), dim=-2)
+        question_cnn, _ = torch.max(torch.relu(self.cnn_lr(question_embed)), dim=-2)
+        question_cnn = self.bn(question_cnn)
+        answer_cnn, _ = torch.max(torch.relu(self.cnn_lr(answer_embed)), dim=-2)
+        answer_cnn = self.bn(answer_cnn)
 
         # cnn_count = len(self.cnn_list)
         # for depth, cnn in enumerate(self.cnn_list):

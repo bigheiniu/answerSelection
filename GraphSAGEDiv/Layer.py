@@ -16,17 +16,7 @@ class Aggregate(torch.nn.Module):
         result,_ = torch.max(middle_act, dim=-2)
         return result
 
-class OtherNodeGenerate(torch.nn.Module):
-    def __init__(self, lstm_dim):
-        super(OtherNodeGenerate, self).__init__()
-        self.edge_node_weight = nn.Linear(2 * lstm_dim, lstm_dim)
 
-    def forward(self, other_node, edge):
-        middle = torch.cat((other_node, edge), dim=-1)
-        #TODO: different activate function
-        middle = self.edge_node_weight(middle)
-        middle = F.tanh(middle)
-        return middle
 
 
 class AttentionAggregate__different_nodeedge(torch.nn.Module):
@@ -48,9 +38,9 @@ class AttentionAggregate__different_nodeedge(torch.nn.Module):
 
 
 
-class AttentionAggregate_weight_nodeedge(torch.nn.Module):
+class AttentionAggregate_Weight(torch.nn.Module):
     def __init__(self, lstm_dim):
-        super(AttentionAggregate_weight_nodeedge, self).__init__()
+        super(AttentionAggregate_Weight, self).__init__()
         self.attention_weight = nn.Linear(lstm_dim, lstm_dim)
         self.a_weight = nn.Linear(lstm_dim, 1)
 
@@ -70,9 +60,9 @@ class AttentionAggregate_weight_nodeedge(torch.nn.Module):
 
 
 
-class AttentionAggregate(torch.nn.Module):
+class AttentionAggregate_Cos(torch.nn.Module):
     def __init__(self, input1_dim, input2_dim, bilinear_output_dim):
-        super(AttentionAggregate, self).__init__()
+        super(AttentionAggregate_Cos, self).__init__()
         self.bilinear = nn.Bilinear(input1_dim, input2_dim, bilinear_output_dim)
         self.cos_sim = nn.CosineSimilarity(dim=-1)
 
@@ -88,9 +78,21 @@ class AttentionAggregate(torch.nn.Module):
         return result
 
 
-class NodeGenerate_forget(torch.nn.Module):
+class NodeEdgeCombinGenerate(torch.nn.Module):
+    def __init__(self, lstm_dim):
+        super(NodeEdgeCombinGenerate, self).__init__()
+        self.edge_node_weight = nn.Linear(2 * lstm_dim, lstm_dim)
+
+    def forward(self, other_node, edge):
+        middle = torch.cat((other_node, edge), dim=-1)
+        #TODO: different activate function
+        middle = self.edge_node_weight(middle)
+        middle = F.tanh(middle)
+        return middle
+
+class NodeGenerate_Forgete_Gate(torch.nn.Module):
     def __init__(self, input_dim):
-        super(NodeGenerate_forget, self).__init__()
+        super(NodeGenerate_Forgete_Gate, self).__init__()
         self.forget_weight = nn.Linear(input_dim, input_dim)
         self.forget_gate = F.sigmoid(self.forget_weight)
 
@@ -107,9 +109,9 @@ class NodeGenerate_forget(torch.nn.Module):
         result = F.normalize(result)
         return result
 
-class NodeGenerate(torch.nn.Module):
+class NodeGenerate_FeedForward(torch.nn.Module):
     def __init__(self, input_dim):
-        super(NodeGenerate, self).__init__()
+        super(NodeGenerate_FeedForward, self).__init__()
         self.linear = nn.Linear(2*input_dim, input_dim)
 
 

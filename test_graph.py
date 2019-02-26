@@ -3,7 +3,7 @@ from tqdm import tqdm
 #pytorch import
 from Util import *
 
-from DataSet.dataset import classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
+from DataSet.dataset import classifyDataEdge,classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
@@ -19,17 +19,19 @@ eval_epoch_count = 0
 
 def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
-    G = data['G']
+    train_data = data['question_answer_user_train']
+    test_data = data['question_answer_user_test']
     answer_score = data['vote_sort']
     answer_user_dic = data['answer_user_dic']
     question_count = data['question_count']
     user_count = data['user_count']
+    G = data['G']
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
             classifyDataSetEdge(
+                G=G,
                 args = args,
-                G = G,
                 is_training=True
             ),
         num_workers=4,
@@ -39,9 +41,9 @@ def prepare_dataloaders(data, args):
 
         val_loader = torch.utils.data.DataLoader(
         classifyDataSetEdge(
-            G = G,
             args= args,
-            is_training = False
+            G=G,
+            is_training=False
         ),
         num_workers=4,
         batch_size=args.batch_size,
@@ -57,7 +59,7 @@ def prepare_dataloaders(data, args):
                 answer_user_dic=answer_user_dic,
                 answer_score=answer_score
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True
         )
@@ -72,7 +74,7 @@ def prepare_dataloaders(data, args):
                 answer_user_dic=answer_user_dic,
                 answer_score=answer_score
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True
 
@@ -86,17 +88,20 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
-
+    loss1 = 0
+    line_count = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
+            line_count += args.batch_size
             optimizer.zero_grad()
             result = model(q_iter, a_iter, u_iter)[0]
             loss = loss_fn(result, gt_iter)
-            logger.scalar_summary("train_loss",loss.item(),1)
+            loss1 += loss.item()
             loss.backward()
             optimizer.step()
         else:
@@ -109,9 +114,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             result.backward()
             optimizer.step()
 
-
-
-
+    logger.scalar_summary("train_loss", loss1 / line_count, train_epoch_count)
     for tag, value in model.named_parameters():
         if value.grad is None:
             continue
@@ -130,6 +133,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
     one_count = 0
     zero_count = 0
     line_count = 0
+    loss_fn = nn.NLLLoss()
+    loss =  0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -142,7 +147,10 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
                 score, predic = model(q_val, a_val, u_val)
+
+                loss += loss_fn(score, gt_val)
                 score = tensorTonumpy(score, args.cuda)
+                score = score[:,1]
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(q_val, args.cuda)
                 # biggest in the beginning
@@ -206,6 +214,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         p_at_one = p_at_one * 1.0 / question_count
         mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
+        loss = loss / line_count
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
@@ -213,7 +222,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         info_test['accuracy'] = accuracy
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, one_count, zero_count))
+        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -249,7 +258,7 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, eval_epoch_count)
+        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
 
 
         if args.is_classification is False:
@@ -292,11 +301,11 @@ def main():
     pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[4, 128, 256],
-                   "lstm_num_layers":[1,2,3,4],
+    paragram_dic = {"lstm_hidden_size":[64,128, 256],
+                   "lstm_num_layers":[2,1],
                    "drop_out_lstm":[0.5],
                     "lr":[1e-4, 1e-3, 1e-2],
-                    "margin":[0.1, 0.2, 0.3]
+                    # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)
     for paragram in pragram_list:

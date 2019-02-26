@@ -4,9 +4,9 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 
-class LSTM(nn.Module):
+class LSTM_Hidden_List(nn.Module):
     def __init__(self, args, embed_size=-1):
-        super(LSTM, self).__init__()
+        super(LSTM_Hidden_List, self).__init__()
         self.args = args
         if embed_size == -1:
             embed_size = args.embed_size
@@ -73,7 +73,7 @@ class SequentialAttention(nn.Module):
     def __init__(self, args):
         super(SequentialAttention, self).__init__()
         self.args = args
-        self.lstm = LSTM(self.args, embed_size=self.args.bidire_layer * self.args.lstm_hidden_size)
+        self.lstm = LSTM_Hidden_List(self.args, embed_size=self.args.bidire_layer * self.args.lstm_hidden_size)
 
 
     def forward(self, question_vector, answer_matrix):
@@ -112,10 +112,7 @@ class QuestionAttention(nn.Module):
     def forward(self, hidden_list, m_q):
         assert len(m_q.shape) == 2,"shape of m_q is {}".format(m_q.shape)
         S = torch.tanh(self.w_q(hidden_list)) * torch.tanh(self.w_m(m_q).unsqueeze(-2))
-        try:
-            alpha = F.softmax(self.w_attention(S), dim=-2)
-        except:
-            t = 1
+        alpha = F.softmax(self.w_attention(S), dim=-2)
         output = torch.sum(alpha * hidden_list, dim=-2)
         m_q = m_q + output
         return output, m_q

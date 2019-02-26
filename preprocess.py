@@ -38,7 +38,7 @@ def shrink_clean_text(content, max_sent_len):
             word_insts += [word_inst]
         else:
             j += 1
-            word_insts += [Constants.PAD_WORD] * max_sent_len
+            word_insts += [[Constants.PAD_WORD] * max_sent_len]
 
     print('[Info] Get {} instances'.format(len(word_insts)))
     print('[Warning] {} instances is empty'.format(j))
@@ -50,7 +50,7 @@ def shrink_clean_text(content, max_sent_len):
     return word_insts
 
 def get_answer_user_dic(question_answer_user_vote):
-    return { line[1]:line[2] for line in question_answer_user_vote}
+    return {line[1]:line[2] for line in question_answer_user_vote}
 
 def get_answer_vote(question_answer_user_vote):
     #samller in the begining
@@ -111,8 +111,11 @@ def question_answer_user_vote_split(question_answer_user_vote, train_question, t
     for line in question_answer_user_vote:
         if line[0] in train_question:
             train.append(line)
-        else:
+        elif line[0] in test_question:
             test.append(line)
+        else:
+            print("[ERROR]question not in train/test")
+            exit()
     return train, test
 
 def GenerateGraph(train, test):
@@ -135,6 +138,8 @@ def GenerateGraph(train, test):
         G.add_edge(question, user, a_id=answer, score=vote, train_removed=True)
 
     print("[INFO] {} edge is Graph".format(len(G.edges())))
+    print("[INFO] test case count {}".format(len(test)))
+    print("[INFO] Graph difference {}".format(len(train) + len(test) - len(G.edges)))
     return G
 
 
@@ -190,7 +195,7 @@ def main():
     config = config_data_preprocess
     title_world_list = []
     if config.is_classification is False:
-        question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count=stack_xmlhandler.main(config.raw_data)
+        question_answer_user_vote, body, user_context, accept_answer_dic, title, user_count, question_count, love_list_count = stack_xmlhandler.main(config.raw_data)
         title_world_list = shrink_clean_text(title, config.max_len)
     else:
         question_answer_user_vote, body, user_context, user_count, question_count = sem_xmlhandler.main(config.raw_data)
@@ -204,8 +209,8 @@ def main():
     print('[DEBUG] Convert  word instances into sequences of word index.')
     if config.is_classification is False:
         title_id = convert_instance_to_idx_seq(title_world_list, word2idx)
-        info_title = convert_instance_to_idx_seq(title_id, word2idx)
-        print('Title length information: {}'.format(len(info_title)))
+        info_title = content_len_statics(title_id)
+        print('Title length information: {}'.format(info_title))
 
     word_id = convert_instance_to_idx_seq(content_word_list, word2idx)
     info_content = content_len_statics(word_id)
@@ -214,7 +219,20 @@ def main():
 
 
     train_question, test_question= train_test_split(config.train_per, question_count, user_count)
-    train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
+    #ATTENTION: TEST
+    length = len(question_answer_user_vote)
+    item_index = np.array(list(range(length)))
+    np.random.shuffle(item_index)
+    begin = int(config.train_per * length)
+    train_index = item_index[:begin]
+    test_index = item_index[begin:]
+    if type(question_answer_user_vote) is list:
+        question_answer_user_vote = np.array(question_answer_user_vote)
+    train_data = question_answer_user_vote[train_index]
+    test_data = question_answer_user_vote[test_index]
+    #ATTENTION: TEST END
+
+    # train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
 
     G = GenerateGraph(train_data, test_data)
 
@@ -242,7 +260,7 @@ def main():
         data["love_list_count"] = love_list_count
     else:
         data["love_list_count"] = [[],[]]
-        config.save_data="data/store_SemEval.torchpickle"
+        # config.save_data="data/store_SemEval.torchpickle"
     print("Dumping the processed data to pickle file: {}".format(config.save_data))
     torch.save(data, config.save_data)
     print("Finish text extraction, storing")

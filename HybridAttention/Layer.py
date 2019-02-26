@@ -10,9 +10,9 @@ __author__ = "Yichuan Li"
 # def xavier_uniform_init(w):
 #     return nn.init.xavier_uniform(w)
 
-class Entropy(nn.Module):
+class SoftmaxEntropy(nn.Module):
     def __init__(self):
-        super(Entropy, self).__init__()
+        super(SoftmaxEntropy, self).__init__()
 
     def forward(self, input, dim=-1):
         #-1 *  sum (p_x * log_p_x)
@@ -58,14 +58,10 @@ class SelfAttention(nn.Module):
         nn.init.xavier_normal_(self.w_1_v.weight)
 
     def forward(self, input):
-        # input: l_q* lstm_hidden_size
+        # input: batch * l_q * lstm_hidden_size
         t = self.w_1_v(input).squeeze()
-        # alpha = F.softmax(self.w_1_v(input), dim=-1)
+        # t: batch * l_q
         alpha = F.softmax(t, dim=-1)
-        # if(self.args.DEBUG):
-        #     check = alpha.sum(dim=1)
-        # if (self.args.DEBUG):
-            # assert alpha.sum(dim=0)[0] != 1,"self attention each sentence sum {} is not 1".format(alpha.sum(dim=0)[0])
         return alpha
 
 
@@ -84,17 +80,13 @@ class HybridAttentionLayer(nn.Module):
         nn.init.xavier_normal_(self.w_aq_m.weight)
         nn.init.xavier_normal_(self.w_2_v.weight)
 
-        self.entropy = Entropy()
+        self.soft_entropy = SoftmaxEntropy()
 
     def forward(self, content1, content2, is_user):
         if(is_user == 2):
             # content1: user vector
             # content2: question vector
-            try:
-                shape = content1.shape
-                content1 = content1.unsqueeze(1).expand(-1, self.args.max_q_len, -1)
-            except:
-                t =1
+            content1 = content1.unsqueeze(1).expand(-1, self.args.max_q_len, -1)
             m = torch.tanh(self.w_q_m(content1) + self.w_a_m(content2) + self.w_aq_m(content1 * content2))
             lambda_ = F.softmax(self.w_2_v(m).squeeze(), dim=-1)
             attention_pa = lambda_
@@ -112,7 +104,7 @@ class HybridAttentionLayer(nn.Module):
                 content2 = content2.unsqueeze(1).expand(-1, self.args.max_a_len, -1, -1)
                 m = torch.tanh(self.w_a_m(content1) + self.w_q_m(content2) + self.w_aq_m(content1 * content2))
 
-            beta_ = self.entropy(self.w_2_v(m).squeeze(), -1)
+            beta_ = self.soft_entropy(self.w_2_v(m).squeeze(), -1)
             attention_pa = beta_
 
 
@@ -131,10 +123,12 @@ class RatioLayer(nn.Module):
         if lambda_ is None:
             #question-answer
             ratio = alpha_ / beta_
+            #dim=-1
             yi = F.softmax(ratio, dim=-1)
             coef = yi
         else:
             ratio = lambda_ * alpha_ / beta_
+            # dim = -1
             theta_ = F.softmax(ratio, dim=-1)
             coef = theta_
 

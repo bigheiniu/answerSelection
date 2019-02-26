@@ -2,11 +2,10 @@ import argparse
 from tqdm import tqdm
 #pytorch import
 from Util import *
-from GraphSAGEDiv import Model as Inducive_Model
 from GraphSAGEDiv import Layer as Inducive_Layer
 from HybridAttention import Model as Hybrid_Model
 
-from DataSet.dataset import clasifyDataSet, rankDataSetUserContext, context_collect_fn_train, context_collect_fn_test, classify_collect_fn
+from DataSet.dataset import classifyDataSetUserContext, rankDataSetUserContext, context_collect_fn_train, context_collect_fn_test, classify_collect_fn_hybrid
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, mean_average_precision, Accuracy, precision_at_k, mean_reciprocal_rank
@@ -32,45 +31,46 @@ def prepare_dataloaders(data, args):
     user_count = data['user_count']
     question_count = data['question_count']
     content_embed = ContentEmbed(data['content'])
+    train_data = data['question_answer_user_train']
+    test_data = data['question_answer_user_test']
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
-            clasifyDataSet(G=data['G'],
-                           args=args,
-                        question_list=train_question,
-                           user_context=user_context,
-                           content=content_embed,
-                           user_count=user_count
-                       ),
+            classifyDataSetUserContext(args=args,
+                                       question_answer_user_vote=train_data,
+                                       content_embed=content_embed,
+                                       user_count=user_count,
+                                       is_hybrid=True,
+                                       user_context=user_context
+                                       ),
         num_workers=0,
         batch_size=args.batch_size,
-        collate_fn=classify_collect_fn,
+        collate_fn=classify_collect_fn_hybrid,
         shuffle=True
         )
 
         val_loader = torch.utils.data.DataLoader(
-        clasifyDataSet(
-            G=data['G'],
+        classifyDataSetUserContext(
             args=args,
-            question_list=test_question,
+            question_answer_user_vote=test_data,
             user_context=user_context,
-            content=content_embed,
-            user_count=user_count
+            content_embed=content_embed,
+            user_count=user_count,
+            is_hybrid=True
         ),
         num_workers=0,
         batch_size=args.batch_size,
-        collate_fn=classify_collect_fn,
+        collate_fn=classify_collect_fn_hybrid,
         shuffle=True)
     else:
-        train_data = data['question_answer_user_train']
-        test_data = data['question_answer_user_test']
+
         answer_score = data['vote_sort']
         answer_user_dic = data['answer_user_dic']
         train_loader = torch.utils.data.DataLoader(
             rankDataSetUserContext(
                 args=args,
                 question_answer_user_vote=train_data,
-                content=content_embed,
+                content_embed=content_embed,
                 user_context=user_context,
                 question_count=question_count,
                 user_count=user_count,
@@ -90,7 +90,7 @@ def prepare_dataloaders(data, args):
                 question_answer_user_vote=test_data,
                 is_training=False,
                 user_context=user_context,
-                content=content_embed,
+                content_embed=content_embed,
                 user_count=user_count
 
             ),
@@ -108,7 +108,7 @@ def prepare_dataloaders(data, args):
 
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
-    loss_fn = nn.NLLLoss() if args.is_classification else Inducive_Layer.PairWiseHingeLoss(args.margin)
+    loss_fn = nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
     flag_i = 0
     flag_j = 0
     for batch in tqdm(
@@ -125,11 +125,9 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             loss.backward()
             optimizer.step()
         else:
-            flag_j += 1
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
 
-            # print("batch size {}".format(args.batch_size))
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
             score_neg = model(question_list, answer_neg_list, user_neg_list)[0]

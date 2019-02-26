@@ -56,9 +56,9 @@ def diversity_evaluation(diversity_answer_recommendation, topK, tfidf, lda):
         lda_score += lda.similarity(candidate_word_space, top_word_space)
     return (tf_idf_score * 1.0) / question_count, (lda_score * 1.0) / question_count
 
-class LSTM(nn.Module):
+class LSTM_MeanPool(nn.Module):
     def __init__(self, args):
-        super(LSTM, self).__init__()
+        super(LSTM_MeanPool, self).__init__()
         self.args = args
         self.lstm = nn.LSTM(args.embed_size, args.lstm_hidden_size, batch_first=True,
                             dropout=args.drop_out_lstm, num_layers=args.lstm_num_layers,bidirectional = args.bidirectional)

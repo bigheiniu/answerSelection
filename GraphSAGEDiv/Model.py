@@ -1,7 +1,6 @@
 from GraphSAGEDiv.NeighSampler import UniformNeighborSampler
 from GraphSAGEDiv.Layer import *
 from Util import *
-from GraphSAGEDiv import DPP
 
 class InducieveLearningQA(nn.Module):
     def __init__(self, args,
@@ -26,13 +25,13 @@ class InducieveLearningQA(nn.Module):
         self.content_embed = content_embed
         self.word2vec_embed = nn.Embedding.from_pretrained(word2vec)
 
-        self.lstm = LSTM(args)
+        self.lstm = LSTM_MeanPool(args)
 
         self.sampler = UniformNeighborSampler(self.adj, self.adj_edge)
-        self.q_aggregate = AttentionAggregate(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
-        self.u_aggregate = AttentionAggregate(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
-        self.q_node_generate = NodeGenerate(self.hidden_state_size)
-        self.u_node_generate = NodeGenerate(self.hidden_state_size)
+        self.q_aggregate = AttentionAggregate_Cos(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
+        self.u_aggregate = AttentionAggregate_Cos(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
+        self.q_node_generate = NodeGenerate_FeedForward(self.hidden_state_size)
+        self.u_node_generate = NodeGenerate_FeedForward(self.hidden_state_size)
         self.a_edge_generate = EdgeGenerate()
 
         self.w_q = nn.Linear(self.hidden_state_size, self.hidden_state_size)

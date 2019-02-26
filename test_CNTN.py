@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_map')
+logger = Logger('./logs_cntn')
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -69,7 +69,7 @@ def prepare_dataloaders(data, args):
                 is_training=True,
                 user_count=user_count,
                 answer_score=answer_score,
-                content = content_embed,
+                content_embed= content_embed,
                 question_count=question_count
             ),
             num_workers=4,
@@ -83,7 +83,7 @@ def prepare_dataloaders(data, args):
                 args=args,
                 question_answer_user_vote=test_data,
                 is_training=False,
-                content=content_embed,
+                content_embed=content_embed,
                 user_count=user_count,
                 question_count=question_count,
 
@@ -102,12 +102,15 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
-
+    loss1 = 0
+    line_count = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
         if args.is_classification:
+
             q_iter, a_iter, gt_iter,_ = map(lambda x: x.to(args.device), batch)
+            line_count += q_iter.shape[0]
             args.batch_size = q_iter.shape[0]
             optimizer.zero_grad()
             result = model(q_iter, a_iter)[0]
@@ -121,11 +124,11 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             score_neg = model(question_list, answer_neg_list)[0]
             loss = torch.sum(loss_fn(score_pos, score_neg))
 
-        logger.scalar_summary("train_loss", loss.item(), train_epoch_count)
+        # logger.scalar_summary("train_loss", loss.item(), train_epoch_count)
         loss.backward()
+        loss1 += loss.item()
         optimizer.step()
 
-    train_epoch_count += 1
 
 
 
@@ -135,7 +138,8 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         tag = tag.replace('.', '/')
         logger.histo_summary(tag, value.cpu().detach().numpy(), train_epoch_count)
         logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),train_epoch_count)
-
+    loss = loss / line_count
+    logger.scalar_summary("train_loss", loss, train_epoch_count)
 
 
 def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
@@ -147,6 +151,8 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
     one_count = 0
     zero_count = 0
     line_count = 0
+    loss_fn = nn.NLLLoss()
+    loss = 0
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -158,7 +164,9 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
                 line_count += args.batch_size
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
-                _, score, predic = model(q_val, a_val)
+                log_softmax, score, predic = model(q_val, a_val)
+                loss += loss_fn(log_softmax, gt_val).item()
+
                 score = tensorTonumpy(score, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(question_id_list, args.cuda)
@@ -222,14 +230,17 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
         p_at_one = p_at_one*1.0 / question_count
         mRP = mRP *1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
+        loss = loss / question_count
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
         info_test['mRP'] = mRP
         info_test['accuracy'] = accuracy
+        info_test['eval_loss'] = loss
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, one_count, zero_count))
+
+        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss {},one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -240,9 +251,9 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
         info_test['P@1'] = p_at_one
         info_test['lda'] = lda_score
         info_test['tfidf'] = tf_idf_score
+
         print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}, lda score is {}, tf_idf score is {}".format(ndcg_loss, p_at_one, lda_score, tf_idf_score))
 
-    eval_epoch_count += 1
 
 
     for tag, value in info_test.items():
@@ -260,7 +271,7 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
     lda=None
     tfidf=None
     if args.is_classification is False:
-        cov_model_path = args.cov_model_path +  "CNTN"
+        cov_model_path = args.cov_model_path + "CNTN"
         tfidf = TFIDFSimilar(content, args.cov_pretrain, cov_model_path)
         lda = LDAsimilarity(content, args.lda_topic, args.cov_pretrain, cov_model_path)
     info_val = {}
@@ -269,9 +280,9 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        eval_epoch(model, val_data, args, eval_epoch_count, tfidf_model=tfidf, lda_model=lda)
-        for tag, value in info_val.items():
-            logger.scalar_summary(tag, value, eval_epoch_count)
+        eval_epoch(model, val_data, args, epoch_i, tfidf_model=tfidf, lda_model=lda)
+        # for tag, value in info_val.items():
+        #     logger.scalar_summary(tag, value, epoch_i)
 
 
 
@@ -280,8 +291,8 @@ def main():
     #===========Load DataSet=============#
     datafoler = "data/"
     #"store_SemEval.torchpickle","tex.torchpickle", "apple.torchpickle",
-
-    datasetname = [ "math.torchpickle"]
+    #,"tex.torchpickle", "apple.torchpickle","math.torchpickle"
+    datasetname = [ "store_SemEval.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.is_classification = True if "SemEval" in datan else False

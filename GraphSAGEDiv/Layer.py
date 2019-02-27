@@ -8,6 +8,7 @@ class Aggregate(torch.nn.Module):
                  ):
         super(Aggregate, self).__init__()
         self.bilinear = nn.Bilinear(input1_dim, input2_dim, bilinear_output_dim)
+        nn.init.xavier_normal_(self.bilinear.weight)
 
     def forward(self, neighbors, edges):
         middle = self.bilinear(neighbors, edges)
@@ -19,12 +20,15 @@ class Aggregate(torch.nn.Module):
 
 
 
-class AttentionAggregate__different_nodeedge(torch.nn.Module):
+class AttentionAggregate_different_nodeedge(torch.nn.Module):
     def __init__(self, lstm_dim):
-        super(AttentionAggregate__different_nodeedge, self).__init__()
+        super(AttentionAggregate_different_nodeedge, self).__init__()
         self.attention_weight_target_node = nn.Linear(lstm_dim, lstm_dim)
         self.attention_weight_other_node = nn.Linear(lstm_dim, lstm_dim)
         self.a_weight = nn.Linear(lstm_dim, 1)
+        nn.init.xavier_normal_(self.attention_weight_target_node.weight)
+        nn.init.xavier_normal_(self.attention_weight_other_node.weight)
+        nn.init.xavier_normal_(self.a_weight.weight)
 
     def forward(self, target, middle):
         # neighbors: batch * neighbor_count * dim
@@ -42,17 +46,20 @@ class AttentionAggregate_Weight(torch.nn.Module):
     def __init__(self, lstm_dim):
         super(AttentionAggregate_Weight, self).__init__()
         self.attention_weight = nn.Linear(lstm_dim, lstm_dim)
+        self.bilinear = nn.Bilinear(lstm_dim, lstm_dim, lstm_dim)
         self.a_weight = nn.Linear(lstm_dim, 1)
+        nn.init.xavier_normal_(self.attention_weight.weight)
+        nn.init.xavier_normal_(self.a_weight.weight)
 
-    def forward(self, target, middle):
+    def forward(self, neighbors, edges, nodes):
         # neighbors: batch * neighbor_count * dim
         # target: batch * 1 * dim
-        target.unsqueeze_(-2)
-        attention_coef = F.leaky_relu(self.a_weight(self.attention_weight(target) + self.attention_weight(middle)))
+        middle = self.bilinear(neighbors, edges)
+        middle_act = torch.tanh(middle)
+        nodes1 = nodes.unsqueeze(-2)
+        attention_coef = F.leaky_relu(self.a_weight(self.attention_weight(nodes1) + self.attention_weight(middle_act)))
         attention_coef = F.softmax(attention_coef, dim=-2)
-
         neighbor_feature = torch.sum(attention_coef * middle, dim=-2)
-
         return neighbor_feature
 
 
@@ -65,6 +72,8 @@ class AttentionAggregate_Cos(torch.nn.Module):
         super(AttentionAggregate_Cos, self).__init__()
         self.bilinear = nn.Bilinear(input1_dim, input2_dim, bilinear_output_dim)
         self.cos_sim = nn.CosineSimilarity(dim=-1)
+
+        nn.init.xavier_normal_(self.bilinear.weight)
 
     def forward(self, neighbors, edges, node):
         middle = self.bilinear(neighbors, edges)
@@ -82,19 +91,21 @@ class NodeEdgeCombinGenerate(torch.nn.Module):
     def __init__(self, lstm_dim):
         super(NodeEdgeCombinGenerate, self).__init__()
         self.edge_node_weight = nn.Linear(2 * lstm_dim, lstm_dim)
+        nn.init.xavier_normal_(self.edge_node_weight.weight)
 
     def forward(self, other_node, edge):
         middle = torch.cat((other_node, edge), dim=-1)
         #TODO: different activate function
         middle = self.edge_node_weight(middle)
-        middle = F.tanh(middle)
+        middle = torch.tanh(middle)
         return middle
 
 class NodeGenerate_Forgete_Gate(torch.nn.Module):
     def __init__(self, input_dim):
         super(NodeGenerate_Forgete_Gate, self).__init__()
         self.forget_weight = nn.Linear(input_dim, input_dim)
-        self.forget_gate = F.sigmoid(self.forget_weight)
+        nn.init.xavier_normal_(self.forget_weight.weight)
+
 
 
 
@@ -105,6 +116,8 @@ class NodeGenerate_Forgete_Gate(torch.nn.Module):
         :param neighbor_feature: batch * feature
         :return:
         '''
+        self.forget_weight.weight = F.sigmoid(self.forget_weight.weight)
+
         result = (1 - self.forget_gate) * item + self.forget_gate * neighbor_agg
         result = F.normalize(result)
         return result

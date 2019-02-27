@@ -10,6 +10,7 @@ from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, me
 from Config import config_model
 from GraphSAGEDiv.Model import InducieveLearningQA
 from Visualization.logger import Logger
+import torch
 
 info = {}
 log_filename = "./logs_graph"
@@ -234,7 +235,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
         info_test['marco_f1'] = marco_f1
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
+        info_test['eval_loss'] = loss
+        print("[Info] p@1: {}, ACC: {}, mAP: {}, MRP: {}, f1: {}, loss: {}, one_count: {}, zero_count: {}".format(p_at_one, accuracy, mAP, mRP, marco_f1, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -310,12 +312,18 @@ def main():
     user_count = data['user_count']
     content = data['content']
     train_data, val_data= prepare_dataloaders(data, args)
-    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+    if False:
+        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+        # torch.save(pre_trained_word2vec,"./word_vec.fuck")
+        # pre_trained_word2vec = torch.load("./word_vec.fuck")
+    else:
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
+
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[32, 64,128, 256],
-                   "lstm_num_layers":[2,1],
-                   "drop_out_lstm":[0.5],
+    paragram_dic = {"lstm_hidden_size":[ 128, 256],
+                   "lstm_num_layers":[2, 1],
+                   "drop_out_lstm":[0.3],
                     "lr":[1e-4, 1e-3, 1e-2],
                     # "margin":[0.1, 0.2, 0.3]
                     }

@@ -13,6 +13,9 @@ class BiLstMCNN(torch.nn.Module):
         self.atten_weight_a = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.atten_weight_q = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
         self.atten_last = nn.Linear(args.lstm_hidden_size, 1)
+        self.question_weight = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
+        self.answer_weight = nn.Linear(args.lstm_hidden_size, args.lstm_hidden_size)
+        self.classify_weight = nn.Linear(args.lstm_hidden_size, args.num_class)
 
     def forward(self, question, good_answer, is_training=True):
         question_embed = self.word_embed(question)
@@ -41,7 +44,13 @@ class BiLstMCNN(torch.nn.Module):
 
         output_q1 = output_q.squeeze()
         drop_output_q1 = F.dropout(output_q1, 0.5)
-        good_score = F.cosine_similarity(drop_output_q1, drop_atten_good_answer, dim=-1)
-        return good_score
+        if self.args.is_classification:
+            score = torch.tanh(self.question_weight(drop_output_q1) + self.answer_weight(drop_atten_good_answer))
+            score = torch.softmax(score, dim=-1)
+            predic = torch.argmax(score, dim=-1)
+            return score, predic
+        else:
+            good_score = F.cosine_similarity(drop_output_q1, drop_atten_good_answer, dim=-1)
+            return good_score
 
 

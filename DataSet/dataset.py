@@ -91,6 +91,7 @@ def classify_collect_fn_hybrid(batch):
     label_list = torch.LongTensor(label)
     question_id = torch.LongTensor(question_id)
     return question_content, answer_content, user_context, label_list, question_id
+
 class classifyDataEdge(data.Dataset):
     def __init__(self,
                  args,

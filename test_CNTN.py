@@ -7,7 +7,7 @@ from CNTN import Model as CNTN_Model
 
 from DataSet.dataset import rankDataOrdinary, classifyDataOrdinary, my_collect_fn_test, my_clloect_fn_train, classify_collect_fn
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
+from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
 import os
 os.chdir("/home/yichuan/course/induceiveAnswer")
@@ -153,6 +153,8 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
     line_count = 0
     loss_fn = nn.NLLLoss()
     loss = 0
+    predic_list = []
+    gt_list = []
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -170,12 +172,15 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
                 score = tensorTonumpy(score, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(question_id_list, args.cuda)
+                predic = tensorTonumpy(predic, args.cuda)
                 # biggest in the beginning
                 accuracy_temp, zero_count_temp, one_count_temp = Accuracy(gt_val, predic)
+                predic_list += predic.tolist()
+                gt_list += gt_val.tolist()
                 accuracy += accuracy_temp
                 zero_count += zero_count_temp
                 one_count += one_count_temp
-                assert one_count_temp + zero_count_temp == args.batch_size,"one count + zero count is not eqaul to batch size{} != {}".format(one_count_temp + zero_count_temp, args.batch_size)
+                assert one_count_temp + zero_count_temp == args.batch_size,"one count + zero count is not eqaul to batch size {} != {}".format(one_count_temp + zero_count_temp, args.batch_size)
 
                 for questionid, gt, pred_score in zip(question_id_list, gt_val, score):
                     if questionid in questionid_answer_score_gt_dic:
@@ -231,16 +236,18 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
         mRP = mRP *1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
         loss = loss / question_count
+        f1_score = marcoF1(y_gt = gt_list, y_pred=predic_list)
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
         info_test['mRP'] = mRP
         info_test['accuracy'] = accuracy
+        info_test['f1_score'] = f1_score
         info_test['eval_loss'] = loss
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
 
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss {},one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
+        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, f1_score {}, loss {},one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, f1_score, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count

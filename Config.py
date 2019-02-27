@@ -37,7 +37,8 @@ class config_model:
 
 
     #basic setting
-    epoch = 100
+    # epoch =
+    epoch = 60
     log = None
     batch_size = 64
     num_class = 2 if is_classification else 1
@@ -80,8 +81,8 @@ class config_model:
     #================
 
     #128
-    lstm_hidden_size = 64
-    lstm_num_layers = 1
+    lstm_hidden_size = 128
+    lstm_num_layers = 2
     drop_out_lstm = 0.5
     bidirectional = False
     bidire_layer = 2 if bidirectional else 1
@@ -96,7 +97,7 @@ class config_model:
     #diversity setting
     use_dpp = False
     div_topK = 3
-    dpp_early_stop = 0.0001
+    dpp_early_stop = 0.00001
 
     #coverage test model setting
     lda_topic = 20
@@ -134,7 +135,7 @@ class config_model:
     #==============
     neighbor_number_list = [2,3]
     graphsage_depth = len(neighbor_number_list)
-    max_degree=6
+    max_degree = 6
 
     #==============
     #ARMNL smooth

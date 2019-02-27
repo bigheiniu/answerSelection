@@ -7,7 +7,7 @@ from HybridAttention.Model import HybridAttentionModel
 
 from DataSet.dataset import classifyDataSetUserContext, rankDataSetUserContext, my_collect_fn_test_hybrid, my_collect_fn_train_hybrid, classify_collect_fn_hybrid
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
+from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
 import os
 os.chdir("/home/yichuan/course/induceiveAnswer")
@@ -163,6 +163,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
     line_count = 0
     loss_fn = nn.NLLLoss()
     loss = 0
+    predic_list = []
+    gt_list = []
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -178,6 +180,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 loss += loss_fn(log_softmax, gt_val).item()
                 score = tensorTonumpy(score, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
+                gt_list += gt_val.tolist()
+                predic_list += predic.tolist()
                 question_id_list = tensorTonumpy(question_id_list, args.cuda)
                 # biggest in the beginning
                 accuracy_temp, zero_count_temp, one_count_temp = Accuracy(gt_val, predic)
@@ -237,6 +241,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
         loss = loss / line_count
+        f1 = marcoF1(y_gt=gt_list,y_pred=predic_list)
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
@@ -245,6 +250,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
         info_test['eval_loss'] =  loss
+        info_test['marcoF1'] = f1
         print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
 
     else:
@@ -316,7 +322,7 @@ def main():
         train_data, val_data = prepare_dataloaders(data, args)
 
         args.is_classification = True if "SemEval" in datan else False
-        paragram_dic = {"lstm_hidden_size": [128, 256],
+        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
                         "lstm_num_layers": [1, 2, 3, 4],
                         "drop_out_lstm": [0.3, 0.5],
                         "lr": [1e-4, 1e-3, 1e-2],

@@ -220,19 +220,21 @@ def main():
 
     train_question, test_question= train_test_split(config.train_per, question_count, user_count)
     #ATTENTION: TEST
-    length = len(question_answer_user_vote)
-    item_index = np.array(list(range(length)))
-    np.random.shuffle(item_index)
-    begin = int(config.train_per * length)
-    train_index = item_index[:begin]
-    test_index = item_index[begin:]
-    if type(question_answer_user_vote) is list:
-        question_answer_user_vote = np.array(question_answer_user_vote)
-    train_data = question_answer_user_vote[train_index]
-    test_data = question_answer_user_vote[test_index]
-    #ATTENTION: TEST END
+    # length = len(question_answer_user_vote)
+    # item_index = np.array(list(range(length)))
+    # np.random.shuffle(item_index)
+    # begin = int(config.train_per * length)
+    # train_index = item_index[:begin]
+    # test_index = item_index[begin:]
+    # if type(question_answer_user_vote) is list:
+    #     question_answer_user_vote = np.array(question_answer_user_vote)
+    # train_data = question_answer_user_vote[train_index]
+    # test_data = question_answer_user_vote[test_index]
+    # #ATTENTION: TEST END
 
-    # train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
+    train_data, test_data = question_answer_user_vote_split(question_answer_user_vote, train_question, test_question)
+    print("[INFO] {} train question, {} qa pairs, {} test question, {} qa pairs".format(len(train_question), len(train_data), len(test_question), len(test_data)))
+
 
     G = GenerateGraph(train_data, test_data)
 

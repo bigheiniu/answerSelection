@@ -5,13 +5,13 @@ from Util import *
 
 from biLSTM_CNN.Model import BiLstMCNN
 
-from DataSet.dataset import rankDataOrdinary, my_clloect_fn_train, classify_collect_fn, classify_collect_fn_hybrid
+from DataSet.dataset import rankDataOrdinary, my_clloect_fn_train, classify_collect_fn, classifyDataOrdinary
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank
+from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
 import os
-os.chdir("/home/yichuan/course/induceiveAnswer")
-
+# os.chdir("/home/yichuan/course/induceiveAnswer")
+os.chdir("/home/weiying/yichuan/InduciveAnswer")
 
 import resource
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -21,7 +21,14 @@ resource.setrlimit(resource.RLIMIT_NOFILE, (2048, rlimit[1]))
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_bilstm')
+log_filename = "./logs_bilstm"
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
+logger = Logger(log_filename)
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -37,8 +44,34 @@ def prepare_dataloaders(data, args):
     answer_score = data['vote_sort']
     answer_user_dic = data['answer_user_dic']
 
+    if args.is_classification:
+        train_loader = torch.utils.data.DataLoader(
+            classifyDataOrdinary(
+                args=args,
+                question_answer_user_vote=train_data,
+                content=content_embed,
+                user_count=user_count
+            ),
+            num_workers=4,
+            batch_size=args.batch_size,
+            collate_fn=classify_collect_fn,
+            shuffle=True
+        )
 
-    train_loader = torch.utils.data.DataLoader(
+        val_loader = torch.utils.data.DataLoader(
+            classifyDataOrdinary(
+                args=args,
+                question_answer_user_vote=test_data,
+                content=content_embed,
+                user_count=user_count
+            ),
+            num_workers=4,
+            batch_size=args.batch_size,
+            collate_fn=classify_collect_fn,
+            shuffle=True
+        )
+    else:
+        train_loader = torch.utils.data.DataLoader(
         rankDataOrdinary(
                 args=args,
                 question_answer_user_vote=train_data,
@@ -54,7 +87,7 @@ def prepare_dataloaders(data, args):
         collate_fn = my_clloect_fn_train
         )
 
-    val_loader = torch.utils.data.DataLoader(
+        val_loader = torch.utils.data.DataLoader(
         rankDataOrdinary(
                 args=args,
                 question_answer_user_vote=test_data,
@@ -77,19 +110,27 @@ def prepare_dataloaders(data, args):
 
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
-    loss_fn = PairWiseHingeLoss(args.margin)
+    loss_fn =nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
     line = 0
     loss1 = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
-        question_list, answer_pos_list, answer_neg_post = map(lambda x: x.to(args.device), batch)
-        args.batch_size = question_list.shape[0]
-        line += args.batch_size
-        optimizer.zero_grad()
-        good_score = model(question_list, answer_pos_list)
-        bad_score = model(question_list, answer_neg_post)
-        loss = loss_fn(good_score, bad_score)
+        if args.is_classification:
+            question_list, answer_list, gt_list, _ = map(lambda x: x.to(args.device), batch)
+            args.batch_size = question_list.shape[0]
+            line += args.batch_size
+            optimizer.zero_grad()
+            result, _ = model(question_list, answer_list)
+            loss = loss_fn(result, gt_list)
+        else:
+            question_list, answer_pos_list, answer_neg_post = map(lambda x: x.to(args.device), batch)
+            args.batch_size = question_list.shape[0]
+            line += args.batch_size
+            optimizer.zero_grad()
+            good_score = model(question_list, answer_pos_list)
+            bad_score = model(question_list, answer_neg_post)
+            loss = loss_fn(good_score, bad_score)
         loss1 += loss.item()
         loss.backward()
         optimizer.step()
@@ -113,6 +154,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
     questionid_answer_score_gt_dic = {}
     info_test = {}
     line_count = 0
+    predic_list = []
+    gt_list = []
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -121,12 +164,16 @@ def eval_epoch(model, data, args, eval_epoch_count):
             q_val, a_val, gt_val, question_id_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = gt_val.shape[0]
             line_count += gt_val.shape[0]
-            score = model(q_val, a_val, is_training=False)
-            score = tensorTonumpy(score, args.cuda)
-            gt_val = tensorTonumpy(gt_val, args.cuda)
+
             question_id_list = tensorTonumpy(question_id_list, args.cuda)
 
             if args.is_classification:
+                score,predic = model(q_val, a_val, is_training=False)
+                score = tensorTonumpy(score[:,1], args.cuda)
+                gt_val = tensorTonumpy(gt_val, args.cuda)
+                predic = tensorTonumpy(predic, args.cuda)
+                gt_list += gt_val.tolist()
+                predic_list += predic.tolist()
                 for questionid, gt, pred_score in zip(question_id_list, gt_val, score):
                     if questionid in questionid_answer_score_gt_dic:
                         questionid_answer_score_gt_dic[questionid].append([pred_score, gt])
@@ -135,6 +182,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
 
             else:
+                score = model(q_val, a_val, is_training=False)
+                score = tensorTonumpy(score, args.cuda)
+                gt_val = tensorTonumpy(gt_val, args.cuda)
                 a_val = tensorTonumpy(a_val, args.cuda)
                 for questionid, answer_content, gt, pred_score in zip(question_id_list, a_val, gt_val, score):
                     if questionid in questionid_answer_score_gt_dic:
@@ -168,13 +218,16 @@ def eval_epoch(model, data, args, eval_epoch_count):
         mAP = mAP*1.0 / question_count
         p_at_one = p_at_one*1.0 / question_count
         mRP = mRP *1.0 / question_count
-        # loss1 = loss1 / line_count
+        f1_score = marcoF1(y_gt=gt_list, y_pred=predic_list)
+        accuracy, one_count, zero_count = Accuracy(label=gt_list, predict=predic_list)
+        accuracy = accuracy * 1.0 / (one_count + zero_count)
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
         info_test['mRP'] = mRP
-        # info_test['eval_loss'] = loss1
-        print("[Info] mAP: {}, P@1: {}, mRP: {}".format(mAP, p_at_one, mRP))
+        info_test['acc'] = accuracy
+        info_test['f1'] = f1_score
+        print("[Info] mAP: {}, P@1: {}, mRP: {}, acc: {}, f1: {}".format(mAP, p_at_one, mRP, accuracy, f1_score))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -198,9 +251,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
 
 
 
-def train(args, train_data, val_data ,pre_trained_word2vec, content, love_list_count,user_count):
-    love_adj_embed = ContentEmbed(torch.LongTensor(love_list_count[0]))
-    love_weight = ContentEmbed(torch.FloatTensor(love_list_count[1]))
+def train(args, train_data, val_data ,pre_trained_word2vec, content):
     model = BiLstMCNN(args, pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
@@ -211,7 +262,6 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content, love_list_c
         tfidf = TFIDFSimilar(content, False, cov_model_path)
         lda = LDAsimilarity(content, args.lda_topic, False, cov_model_path)
     info_val = {}
-    diversity_answer_recommendation = []
     for epoch_i in range(args.epoch):
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
@@ -248,6 +298,17 @@ def main():
         print(user_count)
         train_data, val_data = prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        train(args, train_data, val_data, pre_trained_word2vec, content, love_list_count, user_count)
+        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
+                        "lstm_num_layers": [1, 2, 3, 4],
+                        "drop_out_lstm": [0.3, 0.5],
+                        "lr": [1e-4, 1e-3, 1e-2],
+                        # "margin": [0.1, 0.2, 0.3]
+                        }
+        pragram_list = grid_search(paragram_dic)
+        for paragram in pragram_list:
+            for key, value in paragram.items():
+                print("Key: {}, Value: {}".format(key, value))
+                setattr(args, key, value)
+            train(args, train_data, val_data, pre_trained_word2vec, content)
 if __name__ == '__main__':
     main()

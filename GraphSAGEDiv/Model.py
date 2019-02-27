@@ -8,6 +8,7 @@ class InducieveLearningQA(nn.Module):
                  adj,
                  adj_edge,
                  content_embed,
+                 user_embed,
                  word2vec
                  ):
         super(InducieveLearningQA, self).__init__()
@@ -21,7 +22,8 @@ class InducieveLearningQA(nn.Module):
         ##############
         #  network structure init
         ##############
-        self.user_embed = nn.Embedding(user_count, self.hidden_state_size)
+        # self.user_embed = user_embed
+        self.user_embed = nn.Embedding(user_count+1, self.hidden_state_size, padding_idx=user_count)
         self.content_embed = content_embed
         self.word2vec_embed = nn.Embedding.from_pretrained(word2vec)
 
@@ -31,14 +33,15 @@ class InducieveLearningQA(nn.Module):
         self.q_aggregate = AttentionAggregate_Weight(self.hidden_state_size)
         #Aggregate(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
         self.u_aggregate = AttentionAggregate_Weight(self.hidden_state_size)
+        #AttentionAggregate_Weight(self.hidden_state_size)
         # Aggregate(self.hidden_state_size, self.hidden_state_size, self.hidden_state_size)
-        self.q_node_generate = NodeGenerate_FeedForward(self.hidden_state_size)
-        self.u_node_generate = NodeGenerate_FeedForward(self.hidden_state_size)
+        self.q_node_generate = NodeGenerate_Forgete_Gate(self.hidden_state_size)
+        self.u_node_generate = NodeGenerate_Forgete_Gate(self.hidden_state_size)
         self.a_edge_generate = EdgeGenerate()
 
-        self.w_q = nn.Linear(self.hidden_state_size, self.hidden_state_size)
-        self.w_a = nn.Linear(self.hidden_state_size, self.hidden_state_size)
-        self.w_u = nn.Linear(self.hidden_state_size, self.hidden_state_size)
+        self.w_q = nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
+        self.w_a = nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
+        self.w_u = nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
 
 
         #ATTENTION: use CNN to generate init vector question and answer
@@ -48,7 +51,7 @@ class InducieveLearningQA(nn.Module):
 
 
         if self.args.is_classification:
-            self.w_final = nn.Linear(self.hidden_state_size, args.num_class)
+            self.w_final = nn.Linear(self.hidden_state_size, args.num_class, bias=True)
         else:
             self.w_final = nn.Linear(self.hidden_state_size, 1)
 
@@ -107,9 +110,11 @@ class InducieveLearningQA(nn.Module):
                 question_lstm_embed = self.content_cnn(question_embed_word2vec)
                 question_neighbors[i] = question_lstm_embed
 
-
+                #ATTENTION: user context embedding
+                # user_neighbors[i] = self.content_cnn(self.word2vec_embed(self.user_embed.content_embed(user_neighbors[i])))
                 user_neighbors[i] = self.user_embed(user_neighbors[i])
             else:
+                # question_neighbors[i] = self.content_cnn(self.word2vec_embed(self.user_embed.content_embed(question_neighbors[i])))
                 question_neighbors[i] = self.user_embed(question_neighbors[i])
 
                 question_embed = self.content_embed.content_embed(user_neighbors[i] - self.user_count)
@@ -136,7 +141,8 @@ class InducieveLearningQA(nn.Module):
         # answer_lstm_embed = self.lstm(answer_embed_word2vec)
         answer_lstm_embed = self.content_cnn(answer_embed_word2vec)
         answer_edge_feaure = answer_lstm_embed
-
+        th_question = question_neighbors[0]
+        th_user = user_neighbors[0]
 
 
 
@@ -155,6 +161,7 @@ class InducieveLearningQA(nn.Module):
                 user_edge = user_neigbor_edge[layer_no - 1]
                 # update the edge based on two sides of nodes
                 user_edge = self.a_edge_generate(user_edge, user_layer, user_neighbors[layer_no - 1])
+
                 user_neigbor_feature = self.q_aggregate(user_layer, user_edge, user_neighbors[layer_no - 1])
                 # user_neigbor_feature = self.q_aggregate(user_layer, user_edge)
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], user_neigbor_feature)
@@ -163,6 +170,7 @@ class InducieveLearningQA(nn.Module):
                 user_layer = question_neighbors[layer_no]
                 user_edge = question_neighbors_edge[layer_no - 1]
                 user_edge = self.a_edge_generate(user_edge, user_layer, question_neighbors[layer_no - 1])
+
                 user_neighbor_feature = self.q_aggregate(user_layer, user_edge, question_neighbors[layer_no-1])
                 # user_neighbor_feature = self.q_aggregate(user_layer, user_edge)
                 question_neighbors[layer_no - 1] = self.q_node_generate(question_neighbors[layer_no - 1],
@@ -171,13 +179,16 @@ class InducieveLearningQA(nn.Module):
                 question_layer = user_neighbors[layer_no]
                 question_edge = user_neigbor_edge[layer_no - 1]
                 question_edge= self.a_edge_generate(question_edge, question_layer, user_neighbors[layer_no - 1])
+
                 question_neigbor_feature = self.u_aggregate(question_layer, question_edge, user_neighbors[layer_no-1])
                 # question_neigbor_feature = self.u_aggregate(question_layer, question_edge)
 
                 user_neighbors[layer_no - 1] = self.q_node_generate(user_neighbors[layer_no - 1], question_neigbor_feature)
         #score edge strength
         #ATTENTION: remove user feature
-        score = torch.tanh(self.w_a(answer_edge_feaure) + self.w_q(question_neighbors[0]))
+        #+ self.w_u(user_neighbors[0]) + self.w_q(question_neighbors[0])
+        # score = torch.tanh(self.w_a(answer_edge_feaure) + self.w_u(user_neighbors[0]) + self.w_q(question_neighbors[0]))
+        score = torch.tanh(self.w_a(answer_edge_feaure) + self.w_u(user_neighbors[0]) + self.w_q(question_neighbors[0]))
         if self.args.is_classification:
             score = F.log_softmax(self.w_final(score), dim=-1)
             predic = torch.argmax(score, dim=-1)

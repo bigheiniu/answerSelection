@@ -252,13 +252,16 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy):
+def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
+    user_embed_model = UserContextEmbed(content_numpy_embed, args, user_count)
+    user_embed_matrix = user_embed_model.buildUserContextEmbed(context)
+    user_embed_matrix = ContentEmbed(torch.LongTensor(user_embed_matrix).to(args.device))
     adj, adj_edge, _ = Adjance(G, args.max_degree)
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
-    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, pre_trained_word2vec)
+    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, user_embed_matrix, pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -311,11 +314,12 @@ def main():
     G = data['G']
     user_count = data['user_count']
     content = data['content']
+    context = data['user_context']
     train_data, val_data= prepare_dataloaders(data, args)
     if False:
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        # torch.save(pre_trained_word2vec,"./word_vec.fuck")
-        # pre_trained_word2vec = torch.load("./word_vec.fuck")
+        torch.save(pre_trained_word2vec,"./word_vec.fuck")
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
     else:
         pre_trained_word2vec = torch.load("./word_vec.fuck")
 
@@ -333,7 +337,7 @@ def main():
             print("Key: {}, Value: {}".format(key, value))
             setattr(args, key, value)
         train(args=args, train_data=train_data, val_data=val_data,
-              user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec)
+              user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
 
 if __name__ == '__main__':
     main()

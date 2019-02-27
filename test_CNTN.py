@@ -305,9 +305,9 @@ def main():
     datafoler = "data/"
     #"store_SemEval.torchpickle","tex.torchpickle", "apple.torchpickle",
     #,"tex.torchpickle", "apple.torchpickle","math.torchpickle"
-    datasetname = [ "store_SemEval.torchpickle"]
-    args = config_model
+    datasetname = [ "store_SemEval.torchpickle"] * 5
     for datan in datasetname:
+        args = config_model
         args.is_classification = True if "SemEval" in datan else False
         args.num_class = 2 if args.is_classification else 1
         args.data = datafoler + datan

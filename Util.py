@@ -106,42 +106,11 @@ class ContentEmbed:
             content = content.view(shape)
         return content
 
-class ShripContext:
-    def __init__(self, content_embed, user_count, args):
-        self.content_embed = content_embed
-        self.user_count = user_count
-        self.max_len = args.max_u_len
-        self.device = args.device
 
-    def getUserContext(self, context_id_list):
-        document = []
-        for answer_id in context_id_list:
-            document += self.content_embed.content_embed(answer_id - self.user_count)
-            if len(document) > self.args.max_u_len:
-                document = document[:self.args.max_u_len]
-                break
-        if len(document) < self.args.max_u_len:
-            pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
-            document += pad_word
-        document = torch.LongTensor(document).to(self.device)
-        return document
-
-    def shripUser(self, batch_id):
-        shape = batch_id.shape
-        batch_id_new = batch_id.view(-1, shape[-1])
-        batch_id_content = []
-        for user_context in batch_id_new:
-            temp = self.getUserContext(user_context)
-            batch_id_content.append(temp)
-        result = torch.cat(batch_id_content)
-        shape[-1] = self.max_len
-        result = result.view(shape)
-        return result
 
 class UserContextEmbed:
-    def __init__(self, content_embed, user_context_embed, args, user_count):
+    def __init__(self, content_embed, args, user_count):
         self.content_embed = content_embed
-        self.user_context_embed = user_context_embed
         self.user_count = user_count
         self.args = args
 
@@ -159,7 +128,9 @@ class UserContextEmbed:
 
     def buildUserContextEmbed(self, userContext):
         userEmbed = []
-        for context_list in userContext:
+        sorted_ = sorted(userContext.items(), key=lambda x: x[0])
+        for id, (user_id, context_list) in enumerate(sorted_):
+            assert id == user_id, "Not equal"
             userEmbed.append(self.getUserContext(context_list))
         return userEmbed
 

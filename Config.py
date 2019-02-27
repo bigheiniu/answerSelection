@@ -38,7 +38,7 @@ class config_model:
 
     #basic setting
     # epoch =
-    epoch = 60
+    epoch = 100
     log = None
     batch_size = 64
     num_class = 2 if is_classification else 1

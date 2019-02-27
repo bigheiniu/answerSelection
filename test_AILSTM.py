@@ -3,7 +3,7 @@ from tqdm import tqdm
 #pytorch import
 from Util import *
 
-from CNTN import Model as CNTN_Model
+from AILSTM.Model import AILSTM
 
 from DataSet.dataset import rankDataOrdinary, classifyDataOrdinary, my_collect_fn_test, my_clloect_fn_train, classify_collect_fn
 from Metric.coverage_metric import *
@@ -19,7 +19,14 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-log_filename = "./logs_cntn"
+log_filename = "logs_AILSTM"
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
+
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -113,6 +120,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+
         if args.is_classification:
 
             q_iter, a_iter, gt_iter,_ = map(lambda x: x.to(args.device), batch)
@@ -172,10 +180,11 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
                 line_count += args.batch_size
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
-                log_softmax, score, predic = model(q_val, a_val)
-                loss += loss_fn(log_softmax, gt_val).item()
+                score, predic = model(q_val, a_val)
+                loss += loss_fn(score, gt_val).item()
 
                 score = tensorTonumpy(score, args.cuda)
+                score = score[:,1]
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(question_id_list, args.cuda)
                 predic = tensorTonumpy(predic, args.cuda)
@@ -276,7 +285,7 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
 
 
 def train(args, train_data, val_data ,pre_trained_word2vec, content):
-    model = CNTN_Model.CNTN(args, pre_trained_word2vec)
+    model = AILSTM(args, pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)

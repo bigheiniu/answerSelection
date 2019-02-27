@@ -15,7 +15,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 
 
 
-#grid search for paramter
+#grid search for paramted
 from Visualization.logger import Logger
 
 info = {}

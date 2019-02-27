@@ -41,7 +41,7 @@ class AILSTM(nn.Module):
 
         if self.args.is_classification:
             score = torch.log_softmax(self.weight_last(feature_last),dim = -1)
-            predict = score.max(dim=-1)[1]
+            predict = torch.argmax(score,dim=-1)
             return score, predict
         else:
             #ATTENTION: act function is the tanh

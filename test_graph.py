@@ -6,13 +6,19 @@ from Util import *
 from DataSet.dataset import classifyDataEdge,classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
+from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
 from GraphSAGEDiv.Model import InducieveLearningQA
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_map')
+log_filename = "./logs_graph"
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -134,7 +140,9 @@ def eval_epoch(model, data, args, eval_epoch_count):
     zero_count = 0
     line_count = 0
     loss_fn = nn.NLLLoss()
-    loss =  0
+    loss = 0
+    gt_list = []
+    predic_list = []
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -147,11 +155,13 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
                 score, predic = model(q_val, a_val, u_val)
-
                 loss += loss_fn(score, gt_val)
                 score = tensorTonumpy(score, args.cuda)
                 score = score[:,1]
                 gt_val = tensorTonumpy(gt_val, args.cuda)
+                predic = tensorTonumpy(predic, args.cuda)
+                gt_list += gt_val.tolist()
+                predic_list += predic.tolist()
                 question_id_list = tensorTonumpy(q_val, args.cuda)
                 # biggest in the beginning
                 accuracy_temp, zero_count_temp, one_count_temp = Accuracy(gt_val, predic)
@@ -215,11 +225,13 @@ def eval_epoch(model, data, args, eval_epoch_count):
         mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
         loss = loss / line_count
+        marco_f1 = marcoF1(y_gt=gt_list, y_pred=predic_list)
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
         info_test['mRP'] = mRP
         info_test['accuracy'] = accuracy
+        info_test['marco_f1'] = marco_f1
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
         print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, loss: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, loss,one_count, zero_count))
@@ -301,7 +313,7 @@ def main():
     pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[64,128, 256],
+    paragram_dic = {"lstm_hidden_size":[32, 64,128, 256],
                    "lstm_num_layers":[2,1],
                    "drop_out_lstm":[0.5],
                     "lr":[1e-4, 1e-3, 1e-2],

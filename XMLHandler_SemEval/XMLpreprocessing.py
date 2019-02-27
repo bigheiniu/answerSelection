@@ -50,6 +50,7 @@ def parse(xmlfile, content_id, user_dic, user_context):
             a_user_Id = relcomment.attrib["RELC_USERID"]
             a_user_name = relcomment.attrib["RELC_USERNAME"]
 
+            #ATTENTION: remove anonymous
             if a_user_Id == "U2" and a_user_name == "anonymous":
                 continue
             content_id += 1

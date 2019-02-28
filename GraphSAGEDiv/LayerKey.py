@@ -9,12 +9,13 @@ class Aggregate(torch.nn.Module):
         super(Aggregate, self).__init__()
         self.bilinear = nn.Bilinear(input1_dim, input1_dim, input1_dim)
 
-    def forward(self, neighbors, edges):
-        middle = self.bilinear(neighbors, edges)
+    def forward(self, neighbors_value, edges_value):
+        middle = self.bilinear(neighbors_value, edges_value)
         middle_act = F.relu(middle)
         #max-pooling
-        result,_ = torch.max(middle_act, dim=-2)
+        result, _ = torch.max(middle_act, dim=-2)
         return result
+
 
 
 
@@ -38,22 +39,32 @@ class AttentionAggregate_different_nodeedge(torch.nn.Module):
 
 
 
-class AttentionAggregate_Weight(torch.nn.Module):
-    def __init__(self, lstm_dim):
-        super(AttentionAggregate_Weight, self).__init__()
-        self.attention_weight = nn.Linear(lstm_dim, lstm_dim)
-        self.bilinear = nn.Bilinear(lstm_dim, lstm_dim, lstm_dim)
-        self.a_weight = nn.Linear(lstm_dim, 1)
+class MiddleGeneration(torch.nn.Module):
+    def __init__(self, dim):
+        self.bilinear = nn.Bilinear(dim, dim, dim)
 
-    def forward(self, neighbors, edges, nodes):
-        # neighbors: batch * neighbor_count * dim
-        # target: batch * 1 * dim
+    def forward(self, neighbors, edges):
         middle = self.bilinear(neighbors, edges)
         middle_act = torch.tanh(middle)
-        nodes1 = nodes.unsqueeze(-2)
-        attention_coef = F.relu(self.a_weight(self.attention_weight(nodes1) + self.attention_weight(middle_act)))
+        return middle_act
+
+
+class AttentionAggregate_Weight(torch.nn.Module):
+    def __init__(self, key_dim):
+        super(AttentionAggregate_Weight, self).__init__()
+        self.attention_weight = nn.Linear(key_dim, key_dim)
+        self.a_weight = nn.Linear(key_dim, 1)
+
+
+
+    def forward(self, middle_key, nodes_key, middle_value):
+        # neighbors: batch * neighbor_count * dim
+        # target: batch * 1 * dim
+
+        nodes1 = nodes_key.unsqueeze(-2)
+        attention_coef = F.relu(self.a_weight(self.attention_weight(nodes1) + self.attention_weight(middle_key)))
         attention_coef = F.softmax(attention_coef, dim=-2)
-        neighbor_feature = torch.sum(attention_coef * middle, dim=-2)
+        neighbor_feature = torch.sum(attention_coef * middle_value, dim=-2)
         return neighbor_feature
 
 
@@ -62,82 +73,83 @@ class AttentionAggregate_Weight(torch.nn.Module):
 
 
 class AttentionAggregate_Cos(torch.nn.Module):
-    def __init__(self, input1_dim, input2_dim, bilinear_output_dim):
+    def __init__(self):
         super(AttentionAggregate_Cos, self).__init__()
-        self.bilinear = nn.Bilinear(input1_dim, input2_dim, bilinear_output_dim)
         self.cos_sim = nn.CosineSimilarity(dim=-1)
 
 
-    def forward(self, neighbors, edges, node):
-        middle = self.bilinear(neighbors, edges)
-        middle_act = F.relu(middle)
-        node_ = node.unsqueeze(-2)
-        similarity = self.cos_sim(middle_act, node_)
+    def forward(self, middle_key, nodes_key, middle_value):
+        node_ = nodes_key.unsqueeze(-2)
+        similarity = self.cos_sim(nodes_key, middle_key)
         # # every element
         weight = F.softmax(similarity, dim=-1)
         weight.unsqueeze_(-1)
-        result = torch.sum(middle_act, dim=-2)
+
+        result = torch.sum(weight * middle_value, dim=-2)
         return result
 
 
 class NodeEdgeCombinGenerate(torch.nn.Module):
-    def __init__(self, lstm_dim):
+    def __init__(self, value_dim):
         super(NodeEdgeCombinGenerate, self).__init__()
-        self.edge_node_weight = nn.Linear(2 * lstm_dim, lstm_dim)
+        self.edge_node_weight = nn.Linear(2 * value_dim, value_dim)
 
-    def forward(self, other_node, edge):
-        middle = torch.cat((other_node, edge), dim=-1)
+    def forward(self, other_node_value, edge_value):
+        middle = torch.cat((other_node_value, edge_value), dim=-1)
         #TODO: different activate function
         middle = self.edge_node_weight(middle)
         middle = torch.tanh(middle)
         return middle
 
 class NodeGenerate_Forgete_Gate(torch.nn.Module):
-    def __init__(self, input_dim):
+    def __init__(self, value_dim):
         super(NodeGenerate_Forgete_Gate, self).__init__()
-        self.forget_weight = torch.rand(input_dim, input_dim)
+        self.forget_weight = torch.rand(value_dim, value_dim)
         self.forget_weight = nn.Parameter(self.forget_weight)
-        # self.forget_weight = nn.Linear(input_dim, input_dim)
-        # nn.init.xavier_normal_(self.forget_weight.weight)
 
-    def forward(self, item, neighbor_agg):
+
+    def forward(self, item_value, neighbor_agg_value):
         '''
 
-        :param item: batch * feature
+        :param item_value: batch * feature
         :param neighbor_feature: batch * feature
         :return:
         '''
 
-        result = F.linear(item,(1 - F.sigmoid(self.forget_weight))) + F.linear(item, F.sigmoid(self.forget_weight))
+        result = F.linear(item_value, (1 - F.sigmoid(self.forget_weight))) + F.linear(item_value, F.sigmoid(self.forget_weight))
         result = F.leaky_relu(result)
         result = F.normalize(result,dim=-1)
         return result
 
 class NodeGenerate_FeedForward(torch.nn.Module):
-    def __init__(self, input_dim):
+    def __init__(self, value_dim):
         super(NodeGenerate_FeedForward, self).__init__()
-        self.linear = nn.Linear(2*input_dim, input_dim)
+        self.linear = nn.Linear(2 * value_dim, value_dim)
 
 
-    def forward(self, item, neighbor_agg):
+    def forward(self, item_value, neighbor_agg_value):
         '''
 
-        :param item: batch * feature
+        :param item_value: batch * feature
         :param neighbor_feature: batch * feature
         :return:
         '''
-        concat = torch.cat((item, neighbor_agg), dim=-1)
+        concat = torch.cat((item_value, neighbor_agg_value), dim=-1)
         result = self.linear(concat)
-        F.leaky_relu(result, inplace=True)
+        result = F.leaky_relu(result)
         result = F.normalize(result, dim=-1)
         return result
 
 class EdgeGenerate(torch.nn.Module):
     def __init__(self):
         super(EdgeGenerate, self).__init__()
+        self.cos = torch.nn.CosineSimilarity(dim=-1)
 
-    def forward(self, edges, questions, users):
-
+    #TODO: edge should get information from question and user node.
+    #ATTENTION: Try using two items attention
+    def forward(self, user_key, answer_key, user_value, answer_value):
+        sim = self.cos(user_key, answer_key)
+        edges = ( 1 - sim ) * answer_key + sim * user_key
         return edges
 
 

@@ -68,8 +68,36 @@ def content_evaluation(content_kind, content_id_list, content):
     avg_length = 1.0 * th / len(content_id_list)
     print("[INFO] {} content avg length is {}".format(content_kind, avg_length))
 
+def keepOneAnswer(question_answer_user_vote):
+    question_user_dic = {}
+    for line in question_answer_user_vote:
+        th = (line[0], line[2])
+        try:
+            score = line[3]
+        except:
+            score = 0
+        if th in question_user_dic:
+            if question_user_dic[th][-1] < score:
+                question_user_dic[th] = [line[1], score]
+        else:
+            question_user_dic[th] = [line[1], score]
+
+    remove_multiple_edge = []
+    for key, value in question_user_dic.items():
+        question_id = key[0]
+        answer_id = value[0]
+        user_id = key[1]
+        score = value[1]
+        temp = [question_id, answer_id, user_id, score]
+        remove_multiple_edge.append(temp)
+    return remove_multiple_edge
+
+
 #quesition_answer_user, content_dic, title_dic, accept_answer_dic, user_context
 def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic, user_context, love_dic, max_love_count=config_data_preprocess.max_love_count):
+    line1 = len(question_answer_user_vote)
+    question_answer_user_vote = keepOneAnswer(question_answer_user_vote)
+    line2 = len(question_answer_user_vote)
     user_context_reorder = {}
 
 
@@ -77,7 +105,7 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
     question_id_freq = list(zip(*np.unique(question, return_counts=True)))
     # remove question only have one answer
 
-    print("[INFO] Question Answer pairs {}".format(len(question_answer_user_vote)))
+    print("[INFO] Question Answer pairs {}, the difference {}".format(len(question_answer_user_vote), line1 - line2))
     _index = 0
     t1 = 0
     question_dic = {}
@@ -113,17 +141,12 @@ def idReorder(question_answer_user_vote, body_dic, title_dic, accept_answer_dic,
             question = question_dic[question] + user_length
             answer = answer_dic[question_answer_user_vote[line_index][1]] + user_length
             user = user_dic[question_answer_user_vote[line_index][2]]
-            try:
-                score = question_answer_user_vote[line_index][3]
-            except:
-                score = 0
+            score = question_answer_user_vote[line_index][3]
             temp = [question, answer, user, score]
             remove_question_answer_user_vote.append(temp)
 
 
     one_answer_question_user = 0
-    ti = 0
-    content_pro = 0
     for user_id, context in user_context.items():
         try:
             user_context_reorder[user_dic[user_id]] = [answer_dic[i] + user_length for i in context if i in answer_dic]

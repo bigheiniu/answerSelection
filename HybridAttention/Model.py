@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from HybridAttention.Layer import UserGeneration, SelfAttention, HybridAttentionLayer,RatioLayer
-from Visualization.logger import  Logger
+
 
 
 class HybridAttentionModel(nn.Module):
@@ -99,9 +99,12 @@ class HybridAttentionModel(nn.Module):
         a_yi = self.ratio_layer(a_alpha_atten, a_beta_atten)
         u_theta = self.ratio_layer(q_alpha_atten, q_beta_atten, u_lambda_atten)
 
-        q_h_new = (q_yi.unsqueeze(-1) * q_lstm).sum(dim=-2)
-        a_h_new = (a_yi.unsqueeze(-1) * a_lstm).sum(dim=-2)
-        u_h_new = (u_theta.unsqueeze(-1) * q_lstm).sum(dim=-2)
+        # q_h_new = (q_yi.unsqueeze(-1) * q_lstm).sum(dim=-2)
+        # a_h_new = (a_yi.unsqueeze(-1) * a_lstm).sum(dim=-2)
+        # u_h_new = (u_theta.unsqueeze(-1) * q_lstm).sum(dim=-2)
+        q_h_new = (q_yi.unsqueeze(2) * q_lstm).sum(dim=-2)
+        a_h_new = (a_yi.unsqueeze(2) * a_lstm).sum(dim=-2)
+        u_h_new = (u_theta.unsqueeze(2) * q_lstm).sum(dim=-2)
         h = torch.tanh(self.w_q(q_h_new) + self.w_a(a_h_new) + self.w_u(u_h_new))
 
         # h_test = torch.tanh(q_lstm.mean(dim=-2) * a_lstm.mean(-2) * u_vec)
@@ -111,7 +114,7 @@ class HybridAttentionModel(nn.Module):
         if self.args.is_classification:
             score_log_softmax = F.log_softmax(score, dim=-1)
             score_soft_max = F.softmax(score, dim=-1)
-            _, predict = score_soft_max.max(-1)
+            _, predict = score_log_softmax.max(-1)
             score_soft_max = score_soft_max[:,1]
             return_list = [score_log_softmax, score_soft_max, predict]
         else:

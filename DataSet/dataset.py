@@ -92,6 +92,25 @@ def classify_collect_fn_hybrid(batch):
     question_id = torch.LongTensor(question_id)
     return question_content, answer_content, user_context, label_list, question_id
 
+class classifyDataEdge(data.Dataset):
+    def __init__(self,
+                 args,
+                 question_answer_user_vote
+                 ):
+        self.args = args
+        self.question_answer_user_vote = question_answer_user_vote
+
+    def __len__(self):
+        return len(self.question_answer_user_vote)
+
+    def __getitem__(self, index):
+        question_answer_vote_line = self.question_answer_user_vote[index]
+        question_id = question_answer_vote_line[0]
+        answer_id = question_answer_vote_line[1]
+        user_id = question_answer_vote_line[2]
+        label = question_answer_vote_line[3]
+        return question_id, answer_id, user_id, label
+
 class classifyDataSetEdge(data.Dataset):
     def __init__(self,
                  G,
@@ -107,9 +126,9 @@ class classifyDataSetEdge(data.Dataset):
         edges = []
         for edge in self.G.edges(data=True):
             train_removed = edge[2]['train_removed']
-            if self.is_training and ~train_removed:
+            if (self.is_training is True) and (train_removed is False):
                 edges.append(edge)
-            elif ~self.is_training and train_removed:
+            elif (self.is_training is False) and (train_removed is True):
                 edges.append(edge)
         return edges
 
@@ -218,7 +237,7 @@ class rankDataOrdinary(data.Dataset):
     def __init__(self,
                  args,
                  question_answer_user_vote,
-                 content,
+                 content_embed,
                  question_count,
                  user_count,
                  answer_score=None,
@@ -226,7 +245,7 @@ class rankDataOrdinary(data.Dataset):
                  is_Multihop=False
                  ):
         self.args = args
-        self.content = content
+        self.content = content_embed
         self.question_answer_user_vote = question_answer_user_vote
 
         self.user_count = user_count
@@ -247,7 +266,7 @@ class rankDataOrdinary(data.Dataset):
         # negative_answer_candidate = self.rank_index[:rank]
         answerid = answerid - self.user_count - self.question_count
         locate = np.where(self.answer_index_sort == answerid)[0][0]
-        if locate > self.args.neg_size and ~self.is_Multihop:
+        if locate > self.args.neg_size and self.is_Multihop is False:
             negative_answer = np.random.choice(list(range(locate)), self.args.neg_size, replace=False)
         else:
             negative_answer = np.random.choice(list(range(len(self.answer_score))), self.args.neg_size, replace=False)
@@ -264,14 +283,14 @@ class rankDataOrdinary(data.Dataset):
         answer_id = question_answer_vote_line[1]
         answer_content = self.content.content_embed(answer_id - self.user_count)
         question_content = self.content.content_embed(question_id - self.user_count)
-        score = question_answer_vote_line[3]
+        pos_score = question_answer_vote_line[3]
         if self.is_training:
             neg_ans = self.negative_sampling(answer_id)
             neg_ans_content = self.content.content_embed(neg_ans - self.user_count)
 
             return question_content, answer_content, neg_ans_content
         else:
-            return question_content, answer_content, score, question_id
+            return question_content, answer_content, pos_score, question_id
 
 
 
@@ -282,14 +301,14 @@ class classifyDataSetUserContext(data.Dataset):
     def __init__(self,
                  args,
                  question_answer_user_vote,
-                 content,
+                 content_embed,
                  user_count,
-                 is_hybrid=True,
+                 is_hybrid=False,
                  user_context=None
                  ):
         self.args = args
         self.user_context = user_context
-        self.content = content
+        self.content_embed = content_embed
         self.user_count = user_count
         self.question_answer_user_vote = question_answer_user_vote
         self.is_hybrid = is_hybrid
@@ -298,7 +317,7 @@ class classifyDataSetUserContext(data.Dataset):
     def get_user_context(self, userid):
         document = []
         for answer_id in self.user_context[userid]:
-            document += self.content.content_embed(answer_id - self.user_count)
+            document += self.content_embed.content_embed(answer_id - self.user_count)
             if len(document) > self.args.max_u_len:
                 document = document[:self.args.max_u_len]
                 break
@@ -315,8 +334,8 @@ class classifyDataSetUserContext(data.Dataset):
         question_answer_vote_line = self.question_answer_user_vote[index]
         question_id = question_answer_vote_line[0]
         answer_id = question_answer_vote_line[1]
-        answer_content = self.content.content_embed(answer_id - self.user_count)
-        question_content = self.content.content_embed(question_id - self.user_count)
+        answer_content = self.content_embed.content_embed(answer_id - self.user_count)
+        question_content = self.content_embed.content_embed(question_id - self.user_count)
         user_context = self.get_user_context(question_answer_vote_line[2]) if self.is_hybrid else question_answer_vote_line[2]
         label = question_answer_vote_line[3]
         return question_content, answer_content, user_context, label, question_id
@@ -326,18 +345,18 @@ class rankDataSetUserContext(data.Dataset):
     def __init__(self,
                  args,
                  question_answer_user_vote,
-                 content,
+                 content_embed,
                  question_count,
                  user_count,
                  user_context=None,
                  is_training=True,
                  answer_score=None,
                  answer_user_dic=None,
-                 is_hybrid=True
+                 is_hybrid=False
                  ):
         self.args = args
         self.user_context = user_context
-        self.content = content
+        self.content_embed = content_embed
         self.is_training = is_training
         self.user_count = user_count
         self.question_count = question_count
@@ -370,7 +389,7 @@ class rankDataSetUserContext(data.Dataset):
     def get_user_context(self, userid):
         document = []
         for answer_id in self.user_context[userid]:
-            document += self.content.content_embed(answer_id - self.user_count)
+            document += self.content_embed.content_embed(answer_id - self.user_count)
             if len(document) > self.args.max_u_len:
                 document = document[:self.args.max_u_len]
                 break
@@ -387,13 +406,13 @@ class rankDataSetUserContext(data.Dataset):
         question_answer_vote_line = self.question_answer_user_vote[index]
         question_id = question_answer_vote_line[0]
         answer_id = question_answer_vote_line[1]
-        answer_content = self.content.content_embed(answer_id - self.user_count)
-        question_content = self.content.content_embed(question_id - self.user_count)
+        answer_content = self.content_embed.content_embed(answer_id - self.user_count)
+        question_content = self.content_embed.content_embed(question_id - self.user_count)
         user_context = self.get_user_context(question_answer_vote_line[2]) if self.is_hybrid else question_answer_vote_line[2]
         score = question_answer_vote_line[3]
         if self.is_training:
             neg_ans = self.negative_sampling(answer_id)
-            neg_ans_content = self.content.content_embed(neg_ans - self.user_count)
+            neg_ans_content = self.content_embed.content_embed(neg_ans - self.user_count)
             neg_user_context = self.get_user_context(self.answer_user_dic[neg_ans]) if self.is_hybrid else self.answer_user_dic[neg_ans]
 
             return question_content, answer_content, user_context, score, neg_ans_content, neg_user_context

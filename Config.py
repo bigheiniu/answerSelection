@@ -15,7 +15,7 @@ class config_data_preprocess:
     raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/math"
 
     # store preprocessed data
-    save_data = "data/math.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    save_data = "data/math_remove.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     log_file = "text_log/preprocess.log"
     logger_name = "preprocess"
     max_love_count = 10
@@ -23,10 +23,9 @@ class config_data_preprocess:
 
 class config_model:
     #in Debug mode or not
-    DEBUG = True
-    cuda = False
+    DEBUG = False
+    cuda = True
     device = torch.device('cuda' if cuda else 'cpu')
-    model_name = "Hybrid"
     is_classification = True
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
@@ -38,6 +37,7 @@ class config_model:
 
 
     #basic setting
+    # epoch =
     epoch = 100
     log = None
     batch_size = 64
@@ -65,7 +65,7 @@ class config_model:
 
 
     # learning rate
-    lr = 0.001
+    lr = 0.0001
 
     #======================
     #word embedding setting
@@ -77,13 +77,13 @@ class config_model:
     embed_size = 100
 
     #================
-    #LSTM setting
+    #LSTM settingw
     #================
 
     #128
-    lstm_hidden_size = 4
+    lstm_hidden_size = 128
     lstm_num_layers = 2
-    drop_out_lstm = 0.3
+    drop_out_lstm = 0.5
     bidirectional = False
     bidire_layer = 2 if bidirectional else 1
 
@@ -97,7 +97,7 @@ class config_model:
     #diversity setting
     use_dpp = False
     div_topK = 3
-    dpp_early_stop = 0.0001
+    dpp_early_stop = 0.00001
 
     #coverage test model setting
     lda_topic = 20
@@ -135,7 +135,7 @@ class config_model:
     #==============
     neighbor_number_list = [2,3]
     graphsage_depth = len(neighbor_number_list)
-    max_degree=6
+    max_degree = 6
 
     #==============
     #ARMNL smooth

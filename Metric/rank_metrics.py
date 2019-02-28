@@ -13,6 +13,10 @@ Learning to Rank for Information Retrieval (Tie-Yan Liu)
 import numpy as np
 # from sklearn.metrics import average_precision_score as avg_sklearn
 from scipy.stats import rankdata
+from sklearn.metrics import f1_score
+
+def marcoF1(y_gt, y_pred):
+    return f1_score(y_true=y_gt,y_pred=y_pred, average="macro")
 
 def mean_reciprocal_rank(rs):
     """Score is reciprocal of the rank of the first relevant item

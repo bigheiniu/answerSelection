@@ -12,7 +12,7 @@ class MultihopAttention(nn.Module):
         self.lstm_hidden_size = args.lstm_hidden_size
         self.word_embed = nn.Embedding.from_pretrained(word2vec_pretrained)
         # batch * max_len * embed_size
-        self.lstm = LSTM(self.args)
+        self.lstm = LSTM_Hidden_List(self.args)
         # answer-question mutual attention share attention trainable weight
         self.attention_layers = self.args.attention_layers
 
@@ -43,7 +43,7 @@ class MultihopAttention(nn.Module):
             # o_a_mlp = self.answer_model_mlp(o_q, lstm_list_answer)
 
             o_a_sequential = self.answer_model_sequential(o_q, lstm_list_answer)
-            score += F.cosine_similarity(o_q.squeeze(1), o_a_sequential)
+            score += F.cosine_similarity(o_q.squeeze(-2), o_a_sequential)
         score = score / self.attention_layers
         return score
 

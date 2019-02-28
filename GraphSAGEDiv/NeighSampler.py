@@ -18,7 +18,7 @@ class UniformNeighborSampler:
         batch_ids_shape.append(number)
         batch_ids_shape = tuple(batch_ids_shape)
         batch_ids_new = batch_ids.contiguous().view(-1)
-        neighbor_next_layer = (self.neighbor_embed[batch_ids_new][:,:number]).view(batch_ids_shape)
-        edge_next_layer =(self.edge_embed[batch_ids_new][:,:number]).view(batch_ids_shape)
+        neighbor_next_layer = (self.neighbor_embed[batch_ids_new][:, :number]).view(batch_ids_shape)
+        edge_next_layer =(self.edge_embed[batch_ids_new][:, :number]).view(batch_ids_shape)
 
         return neighbor_next_layer, edge_next_layer

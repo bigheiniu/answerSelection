@@ -3,33 +3,42 @@ from tqdm import tqdm
 #pytorch import
 from Util import *
 
-from DataSet.dataset import classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
+from DataSet.dataset import classifyDataEdge,classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
 from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
-from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy
+from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
 from GraphSAGEDiv.Model import InducieveLearningQA
 from Visualization.logger import Logger
+import torch
 
 info = {}
-logger = Logger('./logs_map')
+log_filename = "./logs_graph"
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
 
 def prepare_dataloaders(data, args):
     # ========= Preparing DataLoader =========#
-    G = data['G']
+    train_data = data['question_answer_user_train']
+    test_data = data['question_answer_user_test']
     answer_score = data['vote_sort']
     answer_user_dic = data['answer_user_dic']
     question_count = data['question_count']
     user_count = data['user_count']
+    G = data['G']
     if args.is_classification:
 
         train_loader = torch.utils.data.DataLoader(
             classifyDataSetEdge(
+                G=G,
                 args = args,
-                G = G,
                 is_training=True
             ),
         num_workers=4,
@@ -39,9 +48,9 @@ def prepare_dataloaders(data, args):
 
         val_loader = torch.utils.data.DataLoader(
         classifyDataSetEdge(
-            G = G,
             args= args,
-            is_training = False
+            G=G,
+            is_training=False
         ),
         num_workers=4,
         batch_size=args.batch_size,
@@ -57,7 +66,7 @@ def prepare_dataloaders(data, args):
                 answer_user_dic=answer_user_dic,
                 answer_score=answer_score
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True
         )
@@ -72,7 +81,7 @@ def prepare_dataloaders(data, args):
                 answer_user_dic=answer_user_dic,
                 answer_score=answer_score
             ),
-            num_workers=0,
+            num_workers=4,
             batch_size=args.batch_size,
             shuffle=True
 
@@ -86,17 +95,20 @@ def prepare_dataloaders(data, args):
 def train_epoch(model, data, optimizer, args, train_epoch_count):
     model.train()
     loss_fn = nn.NLLLoss() if args.is_classification else PairWiseHingeLoss(args.margin)
-
+    loss1 = 0
+    line_count = 0
     for batch in tqdm(
         data, mininterval=2, desc=' --(training)--',leave=True
     ):
+
         if args.is_classification:
             q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
+            line_count += args.batch_size
             optimizer.zero_grad()
             result = model(q_iter, a_iter, u_iter)[0]
             loss = loss_fn(result, gt_iter)
-            logger.scalar_summary("train_loss",loss.item(),1)
+            loss1 += loss.item()
             loss.backward()
             optimizer.step()
         else:
@@ -109,9 +121,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             result.backward()
             optimizer.step()
 
-
-
-
+    logger.scalar_summary("train_loss", loss1 / line_count, train_epoch_count)
     for tag, value in model.named_parameters():
         if value.grad is None:
             continue
@@ -130,6 +140,10 @@ def eval_epoch(model, data, args, eval_epoch_count):
     one_count = 0
     zero_count = 0
     line_count = 0
+    loss_fn = nn.NLLLoss()
+    loss = 0
+    gt_list = []
+    predic_list = []
     with torch.no_grad():
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
@@ -142,8 +156,13 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
                 score, predic = model(q_val, a_val, u_val)
+                loss += loss_fn(score, gt_val)
                 score = tensorTonumpy(score, args.cuda)
+                score = score[:,1]
                 gt_val = tensorTonumpy(gt_val, args.cuda)
+                predic = tensorTonumpy(predic, args.cuda)
+                gt_list += gt_val.tolist()
+                predic_list += predic.tolist()
                 question_id_list = tensorTonumpy(q_val, args.cuda)
                 # biggest in the beginning
                 accuracy_temp, zero_count_temp, one_count_temp = Accuracy(gt_val, predic)
@@ -206,14 +225,18 @@ def eval_epoch(model, data, args, eval_epoch_count):
         p_at_one = p_at_one * 1.0 / question_count
         mRP = mRP * 1.0 / question_count
         accuracy = accuracy * 1.0 / line_count
+        loss = loss / line_count
+        marco_f1 = marcoF1(y_gt=gt_list, y_pred=predic_list)
         # visualize the data
         info_test['mAP'] = mAP
         info_test['P@1'] = p_at_one
         info_test['mRP'] = mRP
         info_test['accuracy'] = accuracy
+        info_test['marco_f1'] = marco_f1
         info_test['one_count'] = one_count
         info_test['zero_count'] = zero_count
-        print("[Info] mAP: {}, P@1: {}, mRP: {}, Accuracy: {}, one_count: {}, zero_count: {}".format(mAP, p_at_one, mRP, accuracy, one_count, zero_count))
+        info_test['eval_loss'] = loss
+        print("[Info] p@1: {}, ACC: {}, mAP: {}, MRP: {}, f1: {}, loss: {}, one_count: {}, zero_count: {}".format(p_at_one, accuracy, mAP, mRP, marco_f1, loss,one_count, zero_count))
 
     else:
         p_at_one = p_at_one * 1.0 / question_count
@@ -229,13 +252,16 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy):
+def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
+    user_embed_model = UserContextEmbed(content_numpy_embed, args, user_count)
+    user_embed_matrix = user_embed_model.buildUserContextEmbed(context)
+    user_embed_matrix = ContentEmbed(torch.LongTensor(user_embed_matrix).to(args.device))
     adj, adj_edge, _ = Adjance(G, args.max_degree)
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
-    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, pre_trained_word2vec)
+    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, user_embed_matrix, pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -249,7 +275,7 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, eval_epoch_count)
+        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
 
 
         if args.is_classification is False:
@@ -288,15 +314,22 @@ def main():
     G = data['G']
     user_count = data['user_count']
     content = data['content']
+    context = data['user_context']
     train_data, val_data= prepare_dataloaders(data, args)
-    pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+    if False:
+        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+        torch.save(pre_trained_word2vec,"./word_vec.fuck")
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
+    else:
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
+
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[4, 128, 256],
-                   "lstm_num_layers":[1,2,3,4],
-                   "drop_out_lstm":[0.5],
+    paragram_dic = {"lstm_hidden_size":[ 128, 256],
+                   "lstm_num_layers":[2, 1],
+                   "drop_out_lstm":[0.3],
                     "lr":[1e-4, 1e-3, 1e-2],
-                    "margin":[0.1, 0.2, 0.3]
+                    # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)
     for paragram in pragram_list:
@@ -304,7 +337,7 @@ def main():
             print("Key: {}, Value: {}".format(key, value))
             setattr(args, key, value)
         train(args=args, train_data=train_data, val_data=val_data,
-              user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec)
+              user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
 
 if __name__ == '__main__':
     main()

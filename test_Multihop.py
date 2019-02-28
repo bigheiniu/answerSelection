@@ -5,12 +5,13 @@ from Util import *
 
 from MultihopAttention import Model as MultiHop_Model
 
-from DataSet.dataset import  rankDataOrdinary, my_collect_fn_test, my_clloect_fn_train
+from DataSet.dataset import rankDataOrdinary, my_collect_fn_test, my_clloect_fn_train
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank
 from Config import config_model
 import os
-os.chdir("/home/yichuan/course/induceiveAnswer")
+# weiying house
+os.chdir("/home/weiying/yichuan/InduciveAnswer")
 
 
 
@@ -19,7 +20,19 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_map')
+log_filename = "./logs_multi"
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
+if os.path.isdir(log_filename) is False:
+    os.mkdir(log_filename)
+filelist = [ f for f in os.listdir(log_filename)]
+for f in filelist:
+    os.remove(os.path.join(log_filename, f))
+logger = Logger(log_filename)
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -32,51 +45,16 @@ def prepare_dataloaders(data, args):
     question_count = data['question_count']
     user_count = data['user_count']
     content_embed = ContentEmbed(data['content'])
+
     answer_score = data['vote_sort']
-
-    if args.is_classification:
-
-        train_loader = torch.utils.data.DataLoader(
+    train_loader = torch.utils.data.DataLoader(
             rankDataOrdinary(
                 args=args,
                 question_answer_user_vote=train_data,
                 is_training=True,
                 user_count=user_count,
                 answer_score=answer_score,
-                content=content_embed,
-                question_count=question_count,
-                is_Multihop=True
-            ),
-            num_workers=4,
-            batch_size=args.batch_size,
-            shuffle=True,
-            collate_fn = my_clloect_fn_train
-        )
-
-        val_loader = torch.utils.data.DataLoader(
-            rankDataOrdinary(
-                args=args,
-                question_answer_user_vote=test_data,
-                is_training=False,
-                content=content_embed,
-                user_count=user_count,
-                question_count=question_count,
-                is_Multihop=True
-            ),
-            num_workers=4,
-            batch_size=args.batch_size,
-            shuffle=True,
-            collate_fn = my_collect_fn_test
-        )
-    else:
-        train_loader = torch.utils.data.DataLoader(
-            rankDataOrdinary(
-                args=args,
-                question_answer_user_vote=train_data,
-                is_training=True,
-                user_count=user_count,
-                answer_score=answer_score,
-                content = content_embed,
+                content_embed= content_embed,
                 question_count=question_count
             ),
             num_workers=4,
@@ -85,12 +63,12 @@ def prepare_dataloaders(data, args):
             collate_fn =my_clloect_fn_train
         )
 
-        val_loader = torch.utils.data.DataLoader(
+    val_loader = torch.utils.data.DataLoader(
             rankDataOrdinary(
                 args=args,
                 question_answer_user_vote=test_data,
                 is_training=False,
-                content=content_embed,
+                content_embed=content_embed,
                 user_count=user_count,
                 question_count=question_count,
 
@@ -260,7 +238,8 @@ def main():
     #===========Load DataSet=============#
     datafoler = "data/"
     #"store_SemEval.torchpickle",
-    datasetname = [ "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
+    # datasetname = [ "tex.torchpickle", "apple.torchpickle", "math.torchpickle"]
+    datasetname=["store_SemEval.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.is_classification = True if "SemEval" in datan else False
@@ -272,6 +251,18 @@ def main():
         content = data['content']
         train_data, val_data = prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        train(args, train_data, val_data, pre_trained_word2vec, content)
+        args.is_classification = True if "SemEval" in datan else False
+        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
+                        "lstm_num_layers": [1, 2, 3, 4],
+                        "drop_out_lstm": [0.3, 0.5],
+                        "lr": [1e-4, 1e-3, 1e-2],
+                        # "margin": [0.1, 0.2, 0.3]
+                        }
+        pragram_list = grid_search(paragram_dic)
+        for paragram in pragram_list:
+            for key, value in paragram.items():
+                print("Key: {}, Value: {}".format(key, value))
+                setattr(args, key, value)
+            train(args, train_data, val_data, pre_trained_word2vec, content)
 if __name__ == '__main__':
     main()

@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import logging
 import torch.nn.functional as F
 from sklearn.model_selection import ParameterGrid
+from Constants import Constants
 import random
 
 
@@ -56,9 +57,9 @@ def diversity_evaluation(diversity_answer_recommendation, topK, tfidf, lda):
         lda_score += lda.similarity(candidate_word_space, top_word_space)
     return (tf_idf_score * 1.0) / question_count, (lda_score * 1.0) / question_count
 
-class LSTM(nn.Module):
+class LSTM_MeanPool(nn.Module):
     def __init__(self, args):
-        super(LSTM, self).__init__()
+        super(LSTM_MeanPool, self).__init__()
         self.args = args
         self.lstm = nn.LSTM(args.embed_size, args.lstm_hidden_size, batch_first=True,
                             dropout=args.drop_out_lstm, num_layers=args.lstm_num_layers,bidirectional = args.bidirectional)
@@ -104,6 +105,35 @@ class ContentEmbed:
             content = self.content[batch_id]
             content = content.view(shape)
         return content
+
+
+
+class UserContextEmbed:
+    def __init__(self, content_embed, args, user_count):
+        self.content_embed = content_embed
+        self.user_count = user_count
+        self.args = args
+
+    def getUserContext(self, context_id_list):
+        document = []
+        for answer_id in context_id_list:
+            document += self.content_embed.content_embed(answer_id - self.user_count)
+            if len(document) > self.args.max_u_len:
+                document = document[:self.args.max_u_len]
+                break
+        if len(document) < self.args.max_u_len:
+            pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
+            document += pad_word
+        return document
+
+    def buildUserContextEmbed(self, userContext):
+        userEmbed = []
+        sorted_ = sorted(userContext.items(), key=lambda x: x[0])
+        for id, (user_id, context_list) in enumerate(sorted_):
+            assert id == user_id, "Not equal"
+            userEmbed.append(self.getUserContext(context_list))
+        return userEmbed
+
 
 
 

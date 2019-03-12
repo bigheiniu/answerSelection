@@ -92,7 +92,7 @@ class NodeGenerate_forget(torch.nn.Module):
     def __init__(self, input_dim):
         super(NodeGenerate_forget, self).__init__()
         self.forget_weight = nn.Linear(input_dim, input_dim)
-        self.forget_gate = F.sigmoid(self.forget_weight)
+        self.forget_gate = torch.sigmoid(self.forget_weight.weight)
 
 
 

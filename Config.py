@@ -82,6 +82,7 @@ class config_model:
 
     #128
     lstm_hidden_size = 128
+    value_dim = 10
     lstm_num_layers = 2
     drop_out_lstm = 0.5
     bidirectional = False
@@ -133,7 +134,7 @@ class config_model:
     #==============
     # GraphSage model
     #==============
-    neighbor_number_list = [2,3]
+    neighbor_number_list = [5,5]
     graphsage_depth = len(neighbor_number_list)
     max_degree = 6
 

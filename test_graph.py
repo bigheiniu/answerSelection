@@ -8,7 +8,7 @@ from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
-from GraphSAGEDiv.Model import InducieveLearningQA
+from GraphSAGEDiv.ModelKey import InducieveLearningQA
 from Visualization.logger import Logger
 import torch
 
@@ -255,13 +255,15 @@ def eval_epoch(model, data, args, eval_epoch_count):
 def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
+    content_count = len(content_numpy)
     user_embed_model = UserContextEmbed(content_numpy_embed, args, user_count)
     user_embed_matrix = user_embed_model.buildUserContextEmbed(context)
     user_embed_matrix = ContentEmbed(torch.LongTensor(user_embed_matrix).to(args.device))
     adj, adj_edge, _ = Adjance(G, args.max_degree)
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
-    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, user_embed_matrix, pre_trained_word2vec)
+    model = InducieveLearningQA(args, user_count, content_count, adj, adj_edge, content_embed, user_embed_matrix,
+                                pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -325,10 +327,10 @@ def main():
 
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[ 128, 256],
+    paragram_dic = {"lstm_hidden_size":[128, 256],
                    "lstm_num_layers":[2, 1],
                    "drop_out_lstm":[0.3],
-                    "lr":[1e-4, 1e-3, 1e-2],
+                    "lr":[ 5e-4, 1e-4,1e-2],
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)

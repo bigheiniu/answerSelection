@@ -45,7 +45,6 @@ class MiddleGeneration(torch.nn.Module):
         self.bilinear = nn.Bilinear(dim, dim, dim)
 
     def forward(self, neighbors, edges):
-        return neighbors
         middle = self.bilinear(neighbors, edges)
         middle_act = torch.tanh(middle)
         return middle_act

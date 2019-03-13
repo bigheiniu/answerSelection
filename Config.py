@@ -24,7 +24,7 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = True
+    cuda = False
     device = torch.device('cuda' if cuda else 'cpu')
     is_classification = True
     log_file = "text_log/model_train.log"
@@ -82,7 +82,7 @@ class config_model:
 
     #128
     lstm_hidden_size = 128
-    value_dim = 10
+    value_dim = 32
     lstm_num_layers = 2
     drop_out_lstm = 0.5
     bidirectional = False

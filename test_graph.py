@@ -8,12 +8,12 @@ from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
-from GraphSAGEDiv.ModelKey import InducieveLearningQA
+from GraphSAGEDiv.Model import InducieveLearningQA
 from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph_old"
+log_filename = "./logs_graph_key64"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -327,10 +327,10 @@ def main():
     #grid search
     # if args.model == 1:
     paragram_dic = {"lstm_hidden_size":[128],
-                   "lstm_num_layers":[2, 3, 4, 5, 6],
+                   "lstm_num_layers":[2,3,4,5],
                    "drop_out_lstm":[0.3],
                     "lr":[ 5e-4],
-                    "neighbor_number_list": [[5,2], [5, 5],[5], [2]]
+                    "neighbor_number_list": [[2], [2, 5], [5,2],[5, 5]]
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)

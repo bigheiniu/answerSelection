@@ -38,7 +38,7 @@ class config_model:
 
     #basic setting
     # epoch =
-    epoch = 100
+    epoch = 20
     log = None
     batch_size = 64
     num_class = 2 if is_classification else 1
@@ -134,7 +134,7 @@ class config_model:
     #==============
     # GraphSage model
     #==============
-    neighbor_number_list = [5,5]
+    neighbor_number_list = [2]
     graphsage_depth = len(neighbor_number_list)
     max_degree = 6
 

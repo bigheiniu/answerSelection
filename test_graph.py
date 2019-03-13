@@ -13,7 +13,7 @@ from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph"
+log_filename = "./logs_graph_old"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -252,7 +252,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context):
+def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context, epoch_count):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
     content_count = len(content_numpy)
@@ -272,14 +272,13 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
     tfidf = TFIDFSimilar(content_numpy, False, model_path)
     lda = LDAsimilarity(content_numpy, args.lda_topic, False, model_path)
     info_val = {}
-
     for epoch_i in range(args.epoch):
 
-        train_epoch(model, train_data, optimizer, args, epoch_i)
+        train_epoch(model, train_data, optimizer, args, epoch_count)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
+        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_count)
 
-
+        epoch_count += 1
         if args.is_classification is False:
             lda_cov = 0
             tfidf_cov = 0
@@ -298,7 +297,7 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
 
-
+    return epoch_count
 
 
 
@@ -327,18 +326,21 @@ def main():
 
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[128, 256],
-                   "lstm_num_layers":[2, 1],
+    paragram_dic = {"lstm_hidden_size":[128],
+                   "lstm_num_layers":[2, 3, 4, 5, 6],
                    "drop_out_lstm":[0.3],
-                    "lr":[ 5e-4, 1e-4,1e-2],
+                    "lr":[ 5e-4],
+                    "neighbor_number_list": [[5,2], [5, 5],[5], [2]]
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)
+    epoch_count = 0
     for paragram in pragram_list:
         for key, value in paragram.items():
             print("Key: {}, Value: {}".format(key, value))
             setattr(args, key, value)
-        train(args=args, train_data=train_data, val_data=val_data,
+        epoch_count = train(epoch_count=epoch_count,
+            args=args, train_data=train_data, val_data=val_data,
               user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
 
 if __name__ == '__main__':

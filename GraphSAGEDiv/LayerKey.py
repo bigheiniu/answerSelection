@@ -45,6 +45,7 @@ class MiddleGeneration(torch.nn.Module):
         self.bilinear = nn.Bilinear(dim, dim, dim)
 
     def forward(self, neighbors, edges):
+        return neighbors
         middle = self.bilinear(neighbors, edges)
         middle_act = torch.tanh(middle)
         return middle_act
@@ -180,6 +181,7 @@ class EdgeGenerate(torch.nn.Module):
     #TODO: edge should get information from question and user node.
     #ATTENTION: consider both side of nodes as memory
     def forward(self, neighbor_key, target_key, edge_key, neighbor_value, target_value, edge_value):
+        return edge_value
         shape_key = neighbor_key.shape
         shape_value = neighbor_value.shape
         if len(shape_key) > len(target_key.shape):
@@ -264,9 +266,10 @@ class WeightScore(torch.nn.Module):
 
     def forward(self, question, answer, user):
         #+ self.w_u(user)
+        #self.w_a(answer)
         return self.last_weight(
             torch.tanh(
-                self.w_q(question) + self.w_a(answer)
+                self.w_q(question) + self.w_u(user) + self.w_a(answer)
             )
         )
 

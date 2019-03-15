@@ -1,3 +1,4 @@
+import numpy as np
 class UniformNeighborSampler:
     '''
     Uniformly sample neighbors.
@@ -5,6 +6,7 @@ class UniformNeighborSampler:
     '''
     def __init__(self, adj_neighbor, adj_edge):
         self.neighbor_embed = adj_neighbor
+        self.neighbot_count = adj_neighbor.shape[1]
         self.edge_embed = adj_edge
 
     def sample(self, batch_ids, number):
@@ -18,7 +20,10 @@ class UniformNeighborSampler:
         batch_ids_shape.append(number)
         batch_ids_shape = tuple(batch_ids_shape)
         batch_ids_new = batch_ids.contiguous().view(-1)
-        neighbor_next_layer = (self.neighbor_embed[batch_ids_new][:, :number]).view(batch_ids_shape)
-        edge_next_layer =(self.edge_embed[batch_ids_new][:, :number]).view(batch_ids_shape)
+        chooseNeighbor = list(range(self.neighbot_count))
+        np.random.shuffle(chooseNeighbor)
+        chooseNeighbor = chooseNeighbor[:number]
+        neighbor_next_layer = (self.neighbor_embed[batch_ids_new][:, chooseNeighbor]).view(batch_ids_shape)
+        edge_next_layer =(self.edge_embed[batch_ids_new][:, chooseNeighbor]).view(batch_ids_shape)
 
         return neighbor_next_layer, edge_next_layer

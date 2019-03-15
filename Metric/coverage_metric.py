@@ -123,7 +123,7 @@ if __name__ == '__main__':
     model_path = '/home/yichuan/course/induceiveAnswer/data/th.pi'
     back_ground_data = np.random.randint(0, 1000, (100000, 5))
     lda = LDAsimilarity(back_ground_data, 10, True, model_path)
-    content = np.random.randint(0, 100, (2000,))
+    content = np.random.randint(0, 100 , (2000,))
     highRank = np.random.randint(0, 100, (1000,))
     print("score is {}".format(lda.similarity(content, highRank)))
 

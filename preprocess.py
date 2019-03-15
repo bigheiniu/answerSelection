@@ -12,7 +12,7 @@ from Config import config_data_preprocess
 from Util import createLogHandler
 from XMLHandler_StackOverflow import xmlhandler as stack_xmlhandler
 from XMLHandler_SemEval import xmlhandler as sem_xmlhandler
-from math import ceil
+from networkx import connected_components
 
 
 def shrink_clean_text(content, max_sent_len):
@@ -137,6 +137,7 @@ def GenerateGraph(train, test):
 
         G.add_edge(question, user, a_id=answer, score=vote, train_removed=True)
 
+    # G = max([G.subgraph(c) for c in connected_components(G)], key=len)
     print("[INFO] {} edge is Graph".format(len(G.edges())))
     print("[INFO] test case count {}".format(len(test)))
     print("[INFO] Graph difference {}".format(len(train) + len(test) - len(G.edges)))

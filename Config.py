@@ -24,7 +24,7 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = True
+    cuda = False
     device = torch.device('cuda' if cuda else 'cpu')
     is_classification = True
     log_file = "text_log/model_train.log"
@@ -38,7 +38,7 @@ class config_model:
 
     #basic setting
     # epoch =
-    epoch = 100
+    epoch = 20
     log = None
     batch_size = 64
     num_class = 2 if is_classification else 1
@@ -82,6 +82,7 @@ class config_model:
 
     #128
     lstm_hidden_size = 128
+    value_dim = 32
     lstm_num_layers = 2
     drop_out_lstm = 0.5
     bidirectional = False
@@ -133,7 +134,7 @@ class config_model:
     #==============
     # GraphSage model
     #==============
-    neighbor_number_list = [2,3]
+    neighbor_number_list = [2]
     graphsage_depth = len(neighbor_number_list)
     max_degree = 6
 

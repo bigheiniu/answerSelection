@@ -11,7 +11,7 @@ class AILSTM(nn.Module):
         self.wordEmbedd = nn.Embedding.from_pretrained(pre_trained_word2vec)
         self.LSTM = LSTM_Hidden_List(args)
         self.weight_a = nn.Linear(2 * args.lstm_hidden_size, args.lstm_hidden_size)
-        self.a_feedfroward_question = nn.Linear(2 * args.lstm_hidden_size , 1)
+        self.a_feedfroward_question = nn.Linear(2 * args.lstm_hidden_size, 1)
         self.a_feedfroward_answer = nn.Linear(2*args.lstm_hidden_size, 1)
         self.weight_last = nn.Linear(2 * args.lstm_hidden_size, args.num_class)
 

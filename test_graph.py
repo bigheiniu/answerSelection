@@ -13,7 +13,7 @@ from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph_only_CNN"
+log_filename = "./logs_graph_key64"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -252,16 +252,18 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context):
+def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context, epoch_count):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
+    content_count = len(content_numpy)
     user_embed_model = UserContextEmbed(content_numpy_embed, args, user_count)
     user_embed_matrix = user_embed_model.buildUserContextEmbed(context)
     user_embed_matrix = ContentEmbed(torch.LongTensor(user_embed_matrix).to(args.device))
     adj, adj_edge, _ = Adjance(G, args.max_degree)
     adj = adj.to(args.device)
     adj_edge = adj_edge.to(args.device)
-    model = InducieveLearningQA(args, user_count, adj, adj_edge, content_embed, user_embed_matrix, pre_trained_word2vec)
+    model = InducieveLearningQA(args, user_count, content_count, adj, adj_edge, content_embed, user_embed_matrix,
+                                pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
@@ -270,14 +272,13 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
     tfidf = TFIDFSimilar(content_numpy, False, model_path)
     lda = LDAsimilarity(content_numpy, args.lda_topic, False, model_path)
     info_val = {}
-
     for epoch_i in range(args.epoch):
 
-        train_epoch(model, train_data, optimizer, args, epoch_i)
+        train_epoch(model, train_data, optimizer, args, epoch_count)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
+        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_count)
 
-
+        epoch_count += 1
         if args.is_classification is False:
             lda_cov = 0
             tfidf_cov = 0
@@ -296,7 +297,7 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
 
-
+    return epoch_count
 
 
 
@@ -318,25 +319,28 @@ def main():
     train_data, val_data= prepare_dataloaders(data, args)
     if False:
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        torch.save(pre_trained_word2vec,"./word_vec_math.fuck")
-        pre_trained_word2vec = torch.load("./word_vec_math.fuck")
+        torch.save(pre_trained_word2vec,"./word_vec.fuck")
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
     else:
-        pre_trained_word2vec = torch.load("./word_vec_math.fuck")
+        pre_trained_word2vec = torch.load("./word_vec.fuck")
 
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[ 128],
-                   "lstm_num_layers":[1, 2, 3, 4, 5],
+    paragram_dic = {"lstm_hidden_size":[128],
+                   "lstm_num_layers":[2,3,4,5],
                    "drop_out_lstm":[0.3],
-                    "lr":[5e-4],
+                    "lr":[ 5e-4],
+                    "neighbor_number_list": [[2], [2, 5], [5,2],[5, 5]]
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)
+    epoch_count = 0
     for paragram in pragram_list:
         for key, value in paragram.items():
             print("Key: {}, Value: {}".format(key, value))
             setattr(args, key, value)
-        train(args=args, train_data=train_data, val_data=val_data,
+        epoch_count = train(epoch_count=epoch_count,
+            args=args, train_data=train_data, val_data=val_data,
               user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
 
 if __name__ == '__main__':

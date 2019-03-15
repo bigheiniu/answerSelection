@@ -168,7 +168,7 @@ class rankDataSetEdge(data.Dataset):
         edges = []
         for edge in self.G.edges(data=True):
             train_removed = edge[2]['train_removed']
-            if self.is_training and train_removed:
+            if self.is_training and ~train_removed:
                 edges.append(edge)
             elif ~self.is_training and train_removed:
                 edges.append(edge)

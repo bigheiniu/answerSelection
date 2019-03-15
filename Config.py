@@ -3,7 +3,7 @@ class config_data_preprocess:
 
     #max length of a post
     max_len = 100
-    is_classification = True
+    is_classification = False
     #remove word that frequecy less than
     min_word_count = 5
 
@@ -24,9 +24,9 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = False
+    cuda = True
     device = torch.device('cuda' if cuda else 'cpu')
-    is_classification = True
+    is_classification = False
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 

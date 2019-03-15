@@ -218,13 +218,13 @@ class EdgeGenerate(torch.nn.Module):
 
 
 class ARMNLScore(torch.nn.Module):
-    def __int__(self, inputdim):
-        super(ARMNLScore, self).__int__()
-        self.bilinear = nn.Linear(inputdim, inputdim, 1)
+    def __init__(self, inputdim):
+        super(ARMNLScore, self).__init__()
+        self.bilinear = nn.Bilinear(inputdim, inputdim, 1)
 
 
     def forward(self, question, answer, user):
-        relevance_score = self.bilinear(question, answer)
+        relevance_score = self.bilinear(question, answer).squeeze()
         q_u_score = torch.sum(question * user, dim=-1)
         score = relevance_score * q_u_score
         return score

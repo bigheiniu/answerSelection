@@ -3,7 +3,7 @@ class config_data_preprocess:
 
     #max length of a post
     max_len = 100
-    is_classification = True
+    is_classification = False
     #remove word that frequecy less than
     min_word_count = 5
 
@@ -49,7 +49,7 @@ class config_model:
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     # data = "data/store_stackoverflow_datascience.torchpickle"
     # data = "/home/yichuan/course/induceiveAnswer/data/store_SemEval.torchpickle"
-    data = "data/store_SemEval.torchpickle"
+    data = "data/math_remove.torchpickle"
 
     #=====================
     #content_data setting

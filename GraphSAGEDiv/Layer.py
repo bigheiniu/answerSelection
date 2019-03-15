@@ -48,9 +48,9 @@ class AttentionAggregate__different_nodeedge(torch.nn.Module):
 
 
 
-class AttentionAggregate_weight_nodeedge(torch.nn.Module):
+class AttentionAggregate_Weight(torch.nn.Module):
     def __init__(self, lstm_dim):
-        super(AttentionAggregate_weight_nodeedge, self).__init__()
+        super(AttentionAggregate_Weight, self).__init__()
         self.attention_weight = nn.Linear(lstm_dim, lstm_dim)
         self.a_weight = nn.Linear(lstm_dim, 1)
 

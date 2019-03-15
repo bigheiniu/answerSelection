@@ -13,7 +13,7 @@ from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph"
+log_filename = "./logs_graph_only_CNN"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -318,17 +318,17 @@ def main():
     train_data, val_data= prepare_dataloaders(data, args)
     if False:
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-        torch.save(pre_trained_word2vec,"./word_vec.fuck")
-        pre_trained_word2vec = torch.load("./word_vec.fuck")
+        torch.save(pre_trained_word2vec,"./word_vec_math.fuck")
+        pre_trained_word2vec = torch.load("./word_vec_math.fuck")
     else:
-        pre_trained_word2vec = torch.load("./word_vec.fuck")
+        pre_trained_word2vec = torch.load("./word_vec_math.fuck")
 
     #grid search
     # if args.model == 1:
-    paragram_dic = {"lstm_hidden_size":[ 128, 256],
-                   "lstm_num_layers":[2, 1],
+    paragram_dic = {"lstm_hidden_size":[ 128],
+                   "lstm_num_layers":[1, 2, 3, 4, 5],
                    "drop_out_lstm":[0.3],
-                    "lr":[1e-4, 1e-3, 1e-2],
+                    "lr":[5e-4],
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)

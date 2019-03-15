@@ -8,12 +8,12 @@ from GraphSAGEDiv.DPP import *
 from Metric.coverage_metric import *
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
-from GraphSAGEDiv.Model import InducieveLearningQA
+from GraphSAGEDiv.ModelKey import InducieveLearningQA
 from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph_key64"
+log_filename = "./logs_graph_key8_math"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -114,12 +114,15 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         else:
             question_list, answer_pos_list, user_pos_list, score_pos_list, answer_neg_list, user_neg_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
+            line_count += args.batch_size
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list, user_pos_list)[0]
             score_neg = model(question_list, answer_neg_list, user_neg_list)[0]
             result = torch.sum(loss_fn(score_pos, score_neg))
+            loss1 += result.item()
             result.backward()
             optimizer.step()
+    train_epoch_count += 1
 
     logger.scalar_summary("train_loss", loss1 / line_count, train_epoch_count)
     for tag, value in model.named_parameters():
@@ -148,6 +151,7 @@ def eval_epoch(model, data, args, eval_epoch_count):
         for batch in tqdm(
             data, mininterval=2, desc="  ----(validation)----  ", leave=True
         ):
+            eval_epoch_count += 1
 
             if args.is_classification:
                 q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
@@ -183,11 +187,11 @@ def eval_epoch(model, data, args, eval_epoch_count):
                 args.batch_size = gt_val.shape[0]
                 line_count += args.batch_size
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
-                score, answer_feature = model(q_val, a_val, u_val,need_feature=True)
+                score = model(q_val, a_val, u_val, need_feature=False)[0]
                 score = tensorTonumpy(score, args.cuda)
                 gt_val = tensorTonumpy(gt_val, args.cuda)
                 question_id_list = tensorTonumpy(q_val, args.cuda)
-                a_val = tensorTonumpy(answer_feature, args.cuda)
+                # a_val = tensorTonumpy(answer_feature, args.cuda)
                 for questionid, answer_content, gt, pred_score in zip(question_id_list, a_val, gt_val, score):
                     if questionid in questionid_answer_score_gt_dic:
                         questionid_answer_score_gt_dic[questionid].append([answer_content, pred_score, gt])
@@ -209,11 +213,11 @@ def eval_epoch(model, data, args, eval_epoch_count):
            p_at_one += precision_at_k([rank_gt], args.precesion_at_k)
         else:
 
-            rank_answer_content = np.array([line[0] for line in answer_score_gt_reorder])
+            # rank_answer_content = np.array([line[0] for line in answer_score_gt_reorder])
             rank_relevance_score = [line[-1] for line in answer_score_gt_reorder]
-            rank_list = list(range(len(rank_relevance_score)))
-            rank_order = diversity(featureMatrix=rank_answer_content, rankList=rank_list, relevanceScore=rank_relevance_score, early_stop=args.dpp_early_stop)
-            diversity_answer_recommendation.append(rank_order)
+            # rank_list = list(range(len(rank_relevance_score)))
+            # rank_order = diversity(featureMatrix=rank_answer_content, rankList=rank_list, relevanceScore=rank_relevance_score, early_stop=args.dpp_early_stop)
+            # diversity_answer_recommendation.append(rank_order)
             ndcg_loss += ndcg_at_k(rank_gt, args.ndcg_k)
             if np.argmax(rank_gt) == 0:
                 p_at_one += 1
@@ -272,27 +276,29 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
     tfidf = TFIDFSimilar(content_numpy, False, model_path)
     lda = LDAsimilarity(content_numpy, args.lda_topic, False, model_path)
     info_val = {}
+    train_epoch_count = 0
+    test_epoch_count = 0
     for epoch_i in range(args.epoch):
 
-        train_epoch(model, train_data, optimizer, args, epoch_count)
+        train_epoch(model, train_data, optimizer, args, train_epoch_count)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_count)
+        eval_epoch(model, val_data, args, test_epoch_count)
 
-        epoch_count += 1
-        if args.is_classification is False:
-            lda_cov = 0
-            tfidf_cov = 0
-            for answer_id_list in diversity_answer_recommendation:
-                answer_content = content_numpy_embed.content_embed(answer_id_list)
-                temp_lda, temp_tfidf = diversity_evaluation(answer_content, args.div_topK, tfidf, lda)
-                lda_cov += temp_lda
-                tfidf_cov += temp_tfidf
-            tfidf_cov = tfidf_cov / len(diversity_answer_recommendation)
-            lda_cov = lda_cov / len(diversity_answer_recommendation)
-
-            info_val['tfidf'] = tfidf_cov
-            info_val['lda'] = lda_cov
-            print("[INFO] lda coverage: {}, tfidf coverage: {}".format(lda_cov, tfidf_cov))
+        # epoch_count += 1
+        # if args.is_classification is False:
+        #     lda_cov = 0
+        #     tfidf_cov = 0
+        #     for answer_id_list in diversity_answer_recommendation:
+        #         answer_content = content_numpy_embed.content_embed(answer_id_list)
+        #         temp_lda, temp_tfidf = diversity_evaluation(answer_content, args.div_topK, tfidf, lda)
+        #         lda_cov += temp_lda
+        #         tfidf_cov += temp_tfidf
+        #     tfidf_cov = tfidf_cov / len(diversity_answer_recommendation)
+        #     lda_cov = lda_cov / len(diversity_answer_recommendation)
+        #
+        #     info_val['tfidf'] = tfidf_cov
+        #     info_val['lda'] = lda_cov
+        #     print("[INFO] lda coverage: {}, tfidf coverage: {}".format(lda_cov, tfidf_cov))
 
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, eval_epoch_count)
@@ -330,7 +336,7 @@ def main():
                    "lstm_num_layers":[2,3,4,5],
                    "drop_out_lstm":[0.3],
                     "lr":[ 5e-4],
-                    "neighbor_number_list": [[2], [2, 5], [5,2],[5, 5]]
+                    "neighbor_number_list": [[5,2],[5, 5], [2, 5],  [2]]
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)

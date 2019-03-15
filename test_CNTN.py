@@ -125,6 +125,7 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         else:
             question_list, answer_pos_list, answer_neg_list = map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
+            line_count += args.batch_size
             optimizer.zero_grad()
             score_pos = model(question_list, answer_pos_list)[0]
             score_neg = model(question_list, answer_neg_list)[0]
@@ -144,7 +145,11 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
         tag = tag.replace('.', '/')
         logger.histo_summary(tag, value.cpu().detach().numpy(), train_epoch_count)
         logger.histo_summary(tag + '/grad', value.grad.cpu().numpy(),train_epoch_count)
+    if line_count == 0:
+        line_count += 10
+        print("[WARNNING] Length of data: {}".format(len(data)))
     loss1 = loss1 / line_count
+
     logger.scalar_summary("train_loss", loss1, train_epoch_count)
 
 
@@ -227,9 +232,9 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
            p_at_one += precision_at_k([rank_gt], args.precesion_at_k)
         else:
             rank_answer_content = [line[0] for line in answer_score_gt_reorder]
-            tfidf_cov, lda_cov = diversity_evaluation([rank_answer_content], args.div_topK, tfidf_model, lda_model)
-            tf_idf_score += tfidf_cov
-            lda_score += lda_cov
+            # tfidf_cov, lda_cov = diversity_evaluation([rank_answer_content], args.div_topK, tfidf_model, lda_model)
+            # tf_idf_score += tfidf_cov
+            # lda_score += lda_cov
             ndcg_loss += ndcg_at_k(rank_gt, args.ndcg_k)
             if np.argmax(rank_gt) == 0:
                 p_at_one += 1
@@ -258,14 +263,14 @@ def eval_epoch(model, data, args, eval_epoch_count, tfidf_model, lda_model):
     else:
         p_at_one = p_at_one * 1.0 / question_count
         ndcg_loss = ndcg_loss * 1.0 / question_count
-        lda_score = lda_score * 1.0 / question_count
-        tf_idf_score = tf_idf_score * 1.0 / question_count
+        # lda_score = lda_score * 1.0 / question_count
+        # tf_idf_score = tf_idf_score * 1.0 / question_count
         info_test['nDCGG'] = ndcg_loss
         info_test['P@1'] = p_at_one
         info_test['lda'] = lda_score
         info_test['tfidf'] = tf_idf_score
 
-        print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}, lda score is {}, tf_idf score is {}".format(ndcg_loss, p_at_one, lda_score, tf_idf_score))
+        print("[INFO] Ranking Porblem nDCGG: {}, p@1 is {}".format(ndcg_loss, p_at_one))
 
 
 
@@ -305,7 +310,7 @@ def main():
     datafoler = "data/"
     #"store_SemEval.torchpickle","tex.torchpickle", "apple.torchpickle",
     #,"tex.torchpickle", "apple.torchpickle","math.torchpickle"
-    datasetname = [ "store_SemEval.torchpickle"] * 5
+    datasetname = [ "math_remove.torchpickle"] * 5
     for datan in datasetname:
         args = config_model
         args.is_classification = True if "SemEval" in datan else False
@@ -317,7 +322,11 @@ def main():
         word2ix = data['dict']
         content = data['content']
         train_data, val_data = prepare_dataloaders(data, args)
-        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+        if False:
+            pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
+            torch.save(pre_trained_word2vec, "./word_vec.fuck")
+        else:
+            pre_trained_word2vec = torch.load("./word_vec.fuck")
         train(args, train_data, val_data, pre_trained_word2vec, content)
         args.cov_pretrain = False
 if __name__ == '__main__':

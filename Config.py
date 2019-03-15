@@ -24,9 +24,9 @@ class config_data_preprocess:
 class config_model:
     #in Debug mode or not
     DEBUG = False
-    cuda = False
+    cuda = True
     device = torch.device('cuda' if cuda else 'cpu')
-    is_classification = True
+    is_classification = False
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 
@@ -38,9 +38,9 @@ class config_model:
 
     #basic setting
     # epoch =
-    epoch = 20
+    epoch = 10
     log = None
-    batch_size = 64
+    batch_size = 128
     num_class = 2 if is_classification else 1
 
 

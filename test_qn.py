@@ -3,17 +3,16 @@ from tqdm import tqdm
 #pytorch import
 from Util import *
 
-from DataSet.dataset import classifyDataNei,classifyDataSetEdge, rankDataSetEdge, classify_collect_fn_hybrid, my_collect_fn_test_hybrid, my_collect_fn_test
-from GraphSAGEDiv.DPP import *
-from Metric.coverage_metric import *
+from DataSet.dataset import classifyDataNei, classify_collect_fn_Nei
 from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, mean_reciprocal_rank, Accuracy, marcoF1
 from Config import config_model
-from GraphSAGEDiv.ModelKey import InducieveLearningQA
+from SimQues.Layer import *
+from SimQues.Model import QuestinGenerate
 from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_graph_semval_ARMNL"
+log_filename = "./logs_qsim_embed_1e4"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -24,67 +23,70 @@ i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
 
-def prepare_dataloaders(data, args):
+def prepare_dataloaders(data, ques_finder, args):
     # ========= Preparing DataLoader =========#
     train_data = data['question_answer_user_train']
     test_data = data['question_answer_user_test']
-    answer_score = data['vote_sort']
-    answer_user_dic = data['answer_user_dic']
-    question_count = data['question_count']
     user_count = data['user_count']
-    G = data['G']
-    if args.is_classification:
+    # if args.is_classification:
 
-        train_loader = torch.utils.data.DataLoader(
+    train_loader = torch.utils.data.DataLoader(
             classifyDataNei(
                 args = args,
+                question_neighbor_finder=ques_finder,
+                user_count=user_count,
+                question_answer_user_vote=train_data
 
             ),
-        num_workers=4,
-        batch_size=args.batch_size,
-        shuffle=True
+            num_workers=4,
+            batch_size=args.batch_size,
+            shuffle=True,
+            collate_fn = classify_collect_fn_Nei
         )
 
-        val_loader = torch.utils.data.DataLoader(
-        classifyDataSetEdge(
+    val_loader = torch.utils.data.DataLoader(
+        classifyDataNei(
             args= args,
-            G=G,
-            is_training=False
+            question_neighbor_finder=ques_finder,
+            user_count=user_count,
+            question_answer_user_vote=test_data
         ),
         num_workers=4,
         batch_size=args.batch_size,
-        shuffle=True)
-    else:
-        train_loader = torch.utils.data.DataLoader(
-            rankDataSetEdge(
-                G=G,
-                args=args,
-                is_training=True,
-                question_count=question_count,
-                user_count=user_count,
-                answer_user_dic=answer_user_dic,
-                answer_score=answer_score
-            ),
-            num_workers=4,
-            batch_size=args.batch_size,
-            shuffle=True
-        )
-
-        val_loader = torch.utils.data.DataLoader(
-            rankDataSetEdge(
-                G=data['G'],
-                args=args,
-                is_training=False,
-                question_count=question_count,
-                user_count=user_count,
-                answer_user_dic=answer_user_dic,
-                answer_score=answer_score
-            ),
-            num_workers=4,
-            batch_size=args.batch_size,
-            shuffle=True
-
-        )
+        shuffle=True,
+        collate_fn = classify_collect_fn_Nei
+    )
+    # else:
+        # train_loader = torch.utils.data.DataLoader(
+        #     rankDataSetEdge(
+        #         G=G,
+        #         args=args,
+        #         is_training=True,
+        #         question_count=question_count,
+        #         user_count=user_count,
+        #         answer_user_dic=answer_user_dic,
+        #         answer_score=answer_score
+        #     ),
+        #     num_workers=4,
+        #     batch_size=args.batch_size,
+        #     shuffle=True
+        # )
+        #
+        # val_loader = torch.utils.data.DataLoader(
+        #     rankDataSetEdge(
+        #         G=data['G'],
+        #         args=args,
+        #         is_training=False,
+        #         question_count=question_count,
+        #         user_count=user_count,
+        #         answer_user_dic=answer_user_dic,
+        #         answer_score=answer_score
+        #     ),
+        #     num_workers=4,
+        #     batch_size=args.batch_size,
+        #     shuffle=True
+        #
+        # )
 
     return train_loader, val_loader
 
@@ -101,11 +103,11 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
     ):
 
         if args.is_classification:
-            q_iter, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
+            q_iter, question_key, question_neighbor, question_neighbor_key, a_iter, u_iter, gt_iter = map(lambda x: x.to(args.device), batch)
             args.batch_size = q_iter.shape[0]
             line_count += args.batch_size
             optimizer.zero_grad()
-            result = model(q_iter, a_iter, u_iter)[0]
+            result = model(q_iter, question_key, question_neighbor, question_neighbor_key, a_iter, u_iter)
             loss = loss_fn(result, gt_iter)
             loss1 += loss.item()
             loss.backward()
@@ -151,13 +153,14 @@ def eval_epoch(model, data, args, eval_epoch_count):
         ):
 
             if args.is_classification:
-                q_val, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
+                q_val, question_key, question_neighbor, question_neighbor_feature, a_val, u_val, gt_val = map(lambda x: x.to(args.device), batch)
                 args.batch_size = gt_val.shape[0]
                 line_count += args.batch_size
                 assert args.batch_size == gt_val.shape[0], "batch size is not eqaul {} != {}".format(args.batch_size, gt_val.shape[0])
 
-                score, predic = model(q_val, a_val, u_val)
+                score = model(q_val, question_key, question_neighbor, question_neighbor_feature, a_val, u_val, gt_val)
                 loss += loss_fn(score, gt_val)
+                predic = torch.argmax(score, dim=-1)
                 score = tensorTonumpy(score, args.cuda)
                 score = score[:,1]
                 gt_val = tensorTonumpy(gt_val, args.cuda)
@@ -253,25 +256,21 @@ def eval_epoch(model, data, args, eval_epoch_count):
     return diversity_answer_recommendation
 
 
-def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, content_numpy, context, epoch_count):
+def train(args, train_data, val_data, user_count, question_count, pre_trained_word2vec, content_numpy, context, epoch_count):
     content_embed = ContentEmbed(torch.LongTensor(content_numpy).to(args.device))
     content_numpy_embed = ContentEmbed(content_numpy)
-    content_count = len(content_numpy)
     user_embed_model = UserContextEmbed(content_numpy_embed, args, user_count)
     user_embed_matrix = user_embed_model.buildUserContextEmbed(context)
     user_embed_matrix = ContentEmbed(torch.LongTensor(user_embed_matrix).to(args.device))
-    adj, adj_edge, _ = Adjance(G, args.max_degree)
-    adj = adj.to(args.device)
-    adj_edge = adj_edge.to(args.device)
-    model = InducieveLearningQA(args, user_count, content_count, adj, adj_edge, content_embed, user_embed_matrix,
-                                pre_trained_word2vec)
+    model = QuestinGenerate(args, user_count, question_count, content_embed, user_embed_matrix,
+                            pre_trained_word2vec)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     model.to(args.device)
     #load coverage model
-    model_path = args.cov_model_path + "Graph"
-    tfidf = TFIDFSimilar(content_numpy, False, model_path)
-    lda = LDAsimilarity(content_numpy, args.lda_topic, False, model_path)
+    # model_path = args.cov_model_path + "Graph"
+    # tfidf = TFIDFSimilar(content_numpy, False, model_path)
+    # lda = LDAsimilarity(content_numpy, args.lda_topic, False, model_path)
     info_val = {}
     for epoch_i in range(args.epoch):
 
@@ -302,8 +301,23 @@ def train(args, train_data, val_data, user_count, pre_trained_word2vec, G, conte
 
 
 
+def buildAnnoyIndex(question_count, content, topic_count):
+    lda_model = LDAKey(content, topic_count=topic_count, model_path='./data/lda_model')
+    lda_vec = np.zeros((question_count, topic_count))
+    for i in range(question_count):
+        lda_output = lda_model.lda_by_index(i)
+        for key, value in lda_output:
+            lda_vec[i, key] = value
 
 
+    # lda = LDAKey(content, topic_count, load_pretrain=False, model_path="./data/lda_model")
+    # lda_vec_list = [lda.lda_by_index(i) for i in range(question_count)]
+    que_neighbor = NeighborLocation(topic_count, file_path="./data/annoy_index", key_vector_list=lda_vec)
+    return que_neighbor
+
+def loadAnnoyIndex(topic_count):
+    que_neighbor = NeighborLocation(topic_count, file_path="./data/annoy_index", load_file=True)
+    return que_neighbor
 
 
 def main():
@@ -312,25 +326,28 @@ def main():
     args = config_model
     print("cuda : {}".format(args.cuda))
     data = torch.load(args.data)
-    word2ix = data['dict']
-    G = data['G']
     user_count = data['user_count']
     content = data['content']
+    word2ix = data['dict']
     context = data['user_context']
-    train_data, val_data= prepare_dataloaders(data, args)
-    if True:
+    question_count = data['question_count']
+    if False:
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
         torch.save(pre_trained_word2vec,"./word_vec_class.fuck")
-        pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+        que_neighbor = buildAnnoyIndex(question_count, content, args.lda_topic)
     else:
         pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+        que_neighbor = loadAnnoyIndex(args.lda_topic)
+
+    train_data, val_data= prepare_dataloaders(data, que_neighbor, args)
+
 
     #grid search
     # if args.model == 1:
     paragram_dic = {"lstm_hidden_size":[128],
                    "lstm_num_layers":[2,3,4,5],
                    "drop_out_lstm":[0.3],
-                    "lr":[ 5e-4],
+                    "lr":[1e-4],
                     "neighbor_number_list": [[2], [2, 5], [5,2],[5, 5]]
                     # "margin":[0.1, 0.2, 0.3]
                     }
@@ -342,7 +359,7 @@ def main():
             setattr(args, key, value)
         epoch_count = train(epoch_count=epoch_count,
             args=args, train_data=train_data, val_data=val_data,
-              user_count=user_count, G=G, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
+              user_count=user_count, question_count=question_count, content_numpy=content, pre_trained_word2vec=pre_trained_word2vec,context=context)
 
 if __name__ == '__main__':
     main()

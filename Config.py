@@ -26,7 +26,7 @@ class config_model:
     DEBUG = False
     cuda = True
     device = torch.device('cuda' if cuda else 'cpu')
-    is_classification = False
+    is_classification = True
     log_file = "text_log/model_train.log"
     logger_name = "model_train"
 
@@ -38,10 +38,11 @@ class config_model:
 
     #basic setting
     # epoch =
-    epoch = 20
+    epoch = 40
     log = None
     batch_size = 64
     num_class = 2 if is_classification else 1
+
 
 
 
@@ -61,7 +62,7 @@ class config_model:
     max_a_len = 100
     #max length of user context
     max_u_len = 200
-
+    k_neighbor = 10
 
 
     # learning rate
@@ -101,7 +102,7 @@ class config_model:
     dpp_early_stop = 0.00001
 
     #coverage test model setting
-    lda_topic = 20
+    lda_topic = 40
     #whether the coverage test model is already trained or not
     cov_pretrain = False
     # location to store or load model

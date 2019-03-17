@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_hybrid')
+logger = Logger('./logs_hybrid_class')
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -321,19 +321,19 @@ def main():
         #     args.device)
         train_data, val_data = prepare_dataloaders(data, args)
 
-        if True:
+        if False:
             pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix,
                                              args.DEBUG).to(args.device)
-            torch.save(pre_trained_word2vec, "./word_vec.fuck")
-            pre_trained_word2vec = torch.load("./word_vec.fuck")
+            torch.save(pre_trained_word2vec, "./word_vec_class.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
         else:
-            pre_trained_word2vec = torch.load("./word_vec.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
 
         args.is_classification = True if "SemEval" in datan else False
-        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
-                        "lstm_num_layers": [1, 2, 3, 4],
-                        "drop_out_lstm": [0.3, 0.5],
-                        "lr": [1e-4, 1e-3, 1e-2],
+        paragram_dic = {"lstm_hidden_size": [128, 256],
+                        "lstm_num_layers": [2, 3],
+                        "drop_out_lstm": [0.3,0.5],
+                        "lr": [1e-4, 5e-4, 1e-3],
                         # "margin": [0.1, 0.2, 0.3]
                         }
         pragram_list = grid_search(paragram_dic)

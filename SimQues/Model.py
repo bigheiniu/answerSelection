@@ -62,11 +62,11 @@ class QuestinGenerate(nn.Module):
         question_value = self.content_cnn(self.word2vec_embed(self.content_embed.content_embed(question - self.user_count)))
         answer_value = self.content_cnn(self.word2vec_embed(self.content_embed.content_embed(answer_edge - self.user_count)))
         user_value = self.content_cnn(self.word2vec_embed(self.user_embed.content_embed(user)))
-        q_key = self.question_key_embedding(question - self.user_count)
-        q_nei_key = self.question_key_embedding(question_neighbors_index - self.user_count)
+        # q_key = self.question_key_embedding(question - self.user_count)
+        # q_nei_key = self.question_key_embedding(question_neighbors_index - self.user_count)
         question_neighbor_value = self.content_cnn(self.word2vec_embed(self.content_embed.content_embed(question_neighbors_index)))
         #
-        agg_neighbor_feature = self.agg(q_nei_key, q_key, question_neighbor_value)
+        agg_neighbor_feature = self.agg(question_neighbors_key, question_key, question_neighbor_value)
         question_value_new = self.que_generate(question_value, agg_neighbor_feature)
 
         score = self.score_fn(question_value_new, answer_value, user_value)

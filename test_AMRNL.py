@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-log_filename = "./logs_AMRNL"
+log_filename = "./logs_AMRNL_class"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -261,10 +261,11 @@ def main():
         train_data, val_data = prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
 
-        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
-                        "lstm_num_layers": [1, 2, 3, 4],
-                        "drop_out_lstm": [0.3, 0.5],
-                        "lr": [1e-4, 1e-3, 1e-2],
+        paragram_dic = {"lstm_hidden_size": [128],
+                        "lstm_num_layers": [2],
+                        "drop_out_lstm": [0.3],
+                        "lr": [1e-4],
+                        "nothing":[1, 2, 3, 4, 5]
                         # "margin": [0.1, 0.2, 0.3]
                         }
         pragram_list = grid_search(paragram_dic)

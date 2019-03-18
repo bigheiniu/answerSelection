@@ -12,7 +12,7 @@ from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_qsim_embed_1e4"
+log_filename = "./logs_qsim_noembed_1e4"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]

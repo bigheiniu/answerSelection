@@ -103,28 +103,130 @@ def classify_collect_fn_Nei(batch):
     gt_iter = torch.LongTensor(gt_iter)
     return q_iter, question_key, question_neighbor, question_neighbor_key, a_iter, u_iter, gt_iter
 
+
+class rankDataNei(data.Dataset):
+    def __init__(self,
+                 args,
+                 question_answer_user_vote_cate,
+                 question_neighbor_finder,
+                 answer_score,
+                 user_count,
+                 question_count,
+                 is_training=False,
+                 answer_user_dic=None
+                 ):
+        super(rankDataNei, self).__init__()
+        self.args = args
+        self.question_answer_user_vote_cate = question_answer_user_vote_cate
+        self.question_neighbor_finder = question_neighbor_finder
+        self.user_count = user_count
+        self.k = args.k_neighbor
+        self.question_count = question_count
+        self.answer_score = answer_score
+        self.answer_index_sort = self.rankAnswer(answer_score)
+        self.is_training = is_training
+        self.answer_user_dic = answer_user_dic
+
+    def findSimCate(self, cate_index):
+        same_cate = self.question_answer_user_vote_cate[self.question_answer_user_vote_cate[:,-1] == cate_index][:,0]
+
+        return same_cate
+
+    def nearestNeighbor(self, neighbors, index):
+        distance_list = [self.question_neighbor_finder.get_distance(index, i) for i in neighbors]
+        sort_index = np.argsort(distance_list)
+        if len(sort_index) < self.k:
+            result = neighbors[sort_index]
+            more = self.k - len(sort_index)
+            result = np.append(result, self.question_neighbor_finder.find_by_index(index, more))
+        else:
+            result = neighbors[sort_index[:self.k]]
+        return result
+
+    def rankAnswer(self, answer_score):
+        # small in the begin
+        rank_answer_index = np.argsort(answer_score)
+        return rank_answer_index
+
+    def negative_sampling(self, answerid):
+        answerid = answerid - self.user_count - self.question_count
+        locate = np.where(self.answer_index_sort == answerid)[0][0]
+        if locate > self.args.neg_size:
+            negative_answer = np.random.choice(list(range(locate)), self.args.neg_size, replace=False)
+        else:
+            negative_answer = np.random.choice(list(range(len(self.answer_score))), self.args.neg_size, replace=False)
+        negative_answer = negative_answer[0]
+        return negative_answer + self.user_count + self.question_count
+
+
+    def __len__(self):
+        return len(self.question_answer_user_vote_cate)
+
+    def __getitem__(self, index):
+        question_answer_vote_line = self.question_answer_user_vote_cate[index]
+        question_id = question_answer_vote_line[0]
+        question_key = self.question_neighbor_finder.get_item(question_id - self.user_count)
+        sam_cateory = self.findSimCate(question_answer_vote_line[4])
+        question_neighbor = self.nearestNeighbor(sam_cateory - self.user_count, question_id - self.user_count)
+        # question_neighbor = self.question_neighbor_finder.find_by_index(question_id - self.user_count, self.k)
+        question_neighbor_feature = [self.question_neighbor_finder.get_item(i) for i in question_neighbor]
+        question_neighbor = [item + self.user_count for item in question_neighbor]
+
+
+        answer_id = question_answer_vote_line[1]
+        user_id = question_answer_vote_line[2]
+
+        if self.is_training:
+            negative_answer_id = self.negative_sampling(answer_id)
+            negative_user_id = self.answer_user_dic[negative_answer_id]
+
+            return question_id, question_key, question_neighbor, question_neighbor_feature, answer_id, user_id, negative_answer_id, \
+                   negative_user_id
+        else:
+            return question_id,  question_key,  question_neighbor, question_neighbor_feature, answer_id, user_id
+
+
+
+
 class classifyDataNei(data.Dataset):
     def __init__(self,
                  args,
-                 question_answer_user_vote,
+                 question_answer_user_vote_cate,
                  question_neighbor_finder,
                  user_count
                  ):
         self.args = args
-        self.question_answer_user_vote = question_answer_user_vote
+        self.question_answer_user_vote_cate = question_answer_user_vote_cate
         self.question_neighbor_finder = question_neighbor_finder
         self.user_count = user_count
         self.k = args.k_neighbor
 
+    def findSimCate(self, cate_index):
+        same_cate = self.question_answer_user_vote_cate[self.question_answer_user_vote_cate[:,-1] == cate_index][:,0]
+
+        return same_cate
+
+    def nearestNeighbor(self, neighbors, index):
+        distance_list = [self.question_neighbor_finder.get_distance(index, i) for i in neighbors]
+        sort_index = np.argsort(distance_list)
+        if len(sort_index) < self.k:
+            result = neighbors[sort_index]
+            more = self.k - len(sort_index)
+            result = np.append(result, self.question_neighbor_finder.find_by_index(index, more))
+        else:
+            result = neighbors[sort_index[:self.k]]
+        return result
 
     def __len__(self):
-        return len(self.question_answer_user_vote)
+        return len(self.question_answer_user_vote_cate)
 
     def __getitem__(self, index):
-        question_answer_vote_line = self.question_answer_user_vote[index]
+        question_answer_vote_line = self.question_answer_user_vote_cate[index]
         question_id = question_answer_vote_line[0]
         question_key = self.question_neighbor_finder.get_item(question_id - self.user_count)
-        question_neighbor = self.question_neighbor_finder.find_by_index(question_id - self.user_count, self.k)
+        sam_cateory = self.findSimCate(question_answer_vote_line[4])
+        question_neighbor = self.nearestNeighbor(sam_cateory - self.user_count, question_id - self.user_count)
+        # question_neighbor = self.question_neighbor_finder.find_by_index(question_id - self.user_count, self.k)
         question_neighbor_feature = [self.question_neighbor_finder.get_item(i) for i in question_neighbor]
         question_neighbor = [item + self.user_count for item in question_neighbor]
 
@@ -134,6 +236,7 @@ class classifyDataNei(data.Dataset):
         label = question_answer_vote_line[3]
 
         return question_id,  question_key,  question_neighbor, question_neighbor_feature, answer_id, user_id, label
+
 
 
 

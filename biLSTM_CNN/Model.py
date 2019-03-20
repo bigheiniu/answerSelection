@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from MultihopAttention.Layer import LSTM_Hidden_List
-
+#LSTM-BASED DEEP LEARNING MODELS FOR NONFACTOID ANSWER SELECTION
 class BiLstMCNN(torch.nn.Module):
     def __init__(self,
                  args, embedding):
@@ -40,17 +40,15 @@ class BiLstMCNN(torch.nn.Module):
         #mean pooling
         pool_good_answer = torch.mean(atten_good_answer, dim=-2)
 
-        drop_atten_good_answer = F.dropout(pool_good_answer, 0.5)
-
         output_q1 = output_q.squeeze()
-        drop_output_q1 = F.dropout(output_q1, 0.5)
+        # drop_output_q1 = F.dropout(output_q1, 0.5)
         if self.args.is_classification:
-            score = torch.tanh(self.question_weight(drop_output_q1) + self.answer_weight(drop_atten_good_answer))
+            score = torch.tanh(self.question_weight(output_q1) + self.answer_weight(pool_good_answer))
             score = torch.softmax(score, dim=-1)
             predic = torch.argmax(score, dim=-1)
             return score, predic
         else:
-            good_score = F.cosine_similarity(drop_output_q1, drop_atten_good_answer, dim=-1)
+            good_score = F.cosine_similarity(output_q1, pool_good_answer, dim=-1)
             return good_score
 
 

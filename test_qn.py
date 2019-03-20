@@ -12,7 +12,7 @@ from Visualization.logger import Logger
 import torch
 
 info = {}
-log_filename = "./logs_qsim_noembed_1e4"
+log_filename = "./logs_qsim_noembed_1e4_cate"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -25,8 +25,8 @@ eval_epoch_count = 0
 
 def prepare_dataloaders(data, ques_finder, args):
     # ========= Preparing DataLoader =========#
-    train_data = data['question_answer_user_train']
-    test_data = data['question_answer_user_test']
+    train_data = np.array(data['question_answer_user_train'])
+    test_data = np.array(data['question_answer_user_test'])
     user_count = data['user_count']
     # if args.is_classification:
 
@@ -35,7 +35,7 @@ def prepare_dataloaders(data, ques_finder, args):
                 args = args,
                 question_neighbor_finder=ques_finder,
                 user_count=user_count,
-                question_answer_user_vote=train_data
+                question_answer_user_vote_cate=train_data
 
             ),
             num_workers=4,
@@ -49,7 +49,7 @@ def prepare_dataloaders(data, ques_finder, args):
             args= args,
             question_neighbor_finder=ques_finder,
             user_count=user_count,
-            question_answer_user_vote=test_data
+            question_answer_user_vote_cate=test_data
         ),
         num_workers=4,
         batch_size=args.batch_size,
@@ -331,7 +331,7 @@ def main():
     word2ix = data['dict']
     context = data['user_context']
     question_count = data['question_count']
-    if False:
+    if True:
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
         torch.save(pre_trained_word2vec,"./word_vec_class.fuck")
         que_neighbor = buildAnnoyIndex(question_count, content, args.lda_topic)
@@ -346,9 +346,10 @@ def main():
     # if args.model == 1:
     paragram_dic = {"lstm_hidden_size":[128],
                    "lstm_num_layers":[2,3,4,5],
-                   "drop_out_lstm":[0.3],
+                   "drop_out_lstm":[0.2],
                     "lr":[1e-4],
-                    "neighbor_number_list": [[2], [2, 5], [5,2],[5, 5]]
+                    "k_neighbor":[2,3,4,5,6,7,8,9,10]
+
                     # "margin":[0.1, 0.2, 0.3]
                     }
     pragram_list = grid_search(paragram_dic)

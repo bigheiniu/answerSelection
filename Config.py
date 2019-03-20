@@ -3,7 +3,7 @@ class config_data_preprocess:
 
     #max length of a post
     max_len = 100
-    is_classification = False
+    is_classification = True
     #remove word that frequecy less than
     min_word_count = 5
 
@@ -15,7 +15,7 @@ class config_data_preprocess:
     raw_data ="data/v3.2" if is_classification else "/home/yichuan/course/data/math"
 
     # store preprocessed data
-    save_data = "data/math_remove.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
+    save_data = "data/math_remove.torchpickle" if not is_classification else "data/store_SemEval_cate.torchpickle"
     log_file = "text_log/preprocess.log"
     logger_name = "preprocess"
     max_love_count = 10
@@ -50,7 +50,8 @@ class config_model:
     # data = "data/store_stackoverflow.torchpickle" if not is_classification else "data/store_SemEval.torchpickle"
     # data = "data/store_stackoverflow_datascience.torchpickle"
     # data = "/home/yichuan/course/induceiveAnswer/data/store_SemEval.torchpickle"
-    data = "data/store_SemEval.torchpickle"
+    # data = "data/store_SemEval.torchpickle"
+    data = "data/store_SemEval_cate.torchpickle"
 
     #=====================
     #content_data setting
@@ -62,7 +63,7 @@ class config_model:
     max_a_len = 100
     #max length of user context
     max_u_len = 200
-    k_neighbor = 10
+    k_neighbor = 5
 
 
     # learning rate

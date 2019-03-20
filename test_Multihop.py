@@ -11,7 +11,7 @@ from Metric.rank_metrics import ndcg_at_k, average_precision, precision_at_k, me
 from Config import config_model
 import os
 # weiying house
-os.chdir("/home/weiying/yichuan/InduciveAnswer")
+# os.chdir("/home/weiying/yichuan/InduciveAnswer")
 
 
 
@@ -252,11 +252,11 @@ def main():
         train_data, val_data = prepare_dataloaders(data, args)
         pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
         args.is_classification = True if "SemEval" in datan else False
-        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
-                        "lstm_num_layers": [1, 2, 3, 4],
-                        "drop_out_lstm": [0.3, 0.5],
-                        "lr": [1e-4, 1e-3, 1e-2],
-                        # "margin": [0.1, 0.2, 0.3]
+        paragram_dic = {"lstm_hidden_size": [128],
+                        "lstm_num_layers": [2],
+                        "drop_out_lstm": [0, 0.3, 0.5],
+                        "lr": [1e-4, 5e-4],
+                        "times":[1,2,3,4,5]
                         }
         pragram_list = grid_search(paragram_dic)
         for paragram in pragram_list:

@@ -35,6 +35,9 @@ class NeighborLocation:
     def get_item(self, index):
         return self.annoy.get_item_vector(index)
 
+    def get_distance(self, index1, index2):
+        return self.annoy.get_distance(index1, index2)
+
 
 class LDAKey:
     def __init__(self, background_data, topic_count, model_path, load_pretrain=False):

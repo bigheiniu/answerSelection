@@ -2,18 +2,18 @@
 
 from lxml import etree
 import os
-def parse(xmlfile, content_id, user_dic, user_context):
+def parse(xmlfile, content_id, user_dic, user_context, category_dic):
     # xmlfile="/home/yichuan/course/induceiveAnswer/data/v3.2/train/SemEval2016-Task3-CQA-QL-train-part1-subtaskA.xml"
     tree = etree.parse(xmlfile)
     th = content_id
     good = 1
     bad = 0
     content = []
-    question_answer_user_label = []
+    question_answer_user_label_cate = []
     for thread in tree.findall("Thread"):
         q_Id_formal = thread.find("RelQuestion").attrib["RELQ_ID"]
         q_Id = content_id
-
+        category = thread.find('RelQuestion').attrib["RELQ_CATEGORY"]
         content_id += 1
         # Store question content
         # TODO: handle non text
@@ -33,8 +33,11 @@ def parse(xmlfile, content_id, user_dic, user_context):
             print(thread.find("RelQuestion/RelQSubject").text)
         assert q_content is not None and len(q_content) > 0, "[ERROR] question content is emtpy"
 
-        content.append(q_content)
 
+        content.append(q_content)
+        if category not in category_dic:
+            category_dic[category] = len(category_dic)
+        category_index = category_dic[category]
         for relcomment in (thread.findall("RelComment")):
 
             a_Id_formal = relcomment.attrib["RELC_ID"]
@@ -80,13 +83,12 @@ def parse(xmlfile, content_id, user_dic, user_context):
             assert answer_content is not None and len(answer_content) > 0, "[ERROR] Answer content is empty"
             content.append(answer_content)
             # user here is answerer
-            question_answer_user_label.append([q_Id, a_Id, a_user_Id, label])
-
+            question_answer_user_label_cate.append([q_Id, a_Id, a_user_Id, label, category_index])
 
 
     assert content_id - th == len(content), "add data problem"
     assert len(content) > 0, "[ERROR] content data in {} is empty".format(xmlfile)
-    return content, question_answer_user_label, user_dic, content_id, user_context
+    return content, question_answer_user_label_cate, user_dic, content_id, user_context, category_dic
 
 
 

@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_hybrid_class')
+logger = Logger('./logs_hybrid_math')
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -308,7 +308,7 @@ def main():
     #===========Load DataSet=============#
     datafoler = "data/"
     #"store_SemEval.torchpickle", "tex.torchpickle", "apple.torchpickle",
-    datasetname = ["store_SemEval.torchpickle"]
+    datasetname = ["math_remove.torchpickle"]
     args = config_model
     for datan in datasetname:
         args.data = datafoler + datan
@@ -324,10 +324,10 @@ def main():
         if False:
             pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix,
                                              args.DEBUG).to(args.device)
-            torch.save(pre_trained_word2vec, "./word_vec_class.fuck")
-            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+            torch.save(pre_trained_word2vec, "./word_vec_math.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_math.fuck")
         else:
-            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_math.fuck")
 
         args.is_classification = True if "SemEval" in datan else False
         paragram_dic = {"lstm_hidden_size": [128, 256],

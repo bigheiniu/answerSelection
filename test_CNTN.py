@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-log_filename = "./logs_cntn"
+log_filename = "./logs_cntn_math"
 if os.path.isdir(log_filename) is False:
     os.mkdir(log_filename)
 filelist = [ f for f in os.listdir(log_filename)]
@@ -322,11 +322,11 @@ def main():
         word2ix = data['dict']
         content = data['content']
         train_data, val_data = prepare_dataloaders(data, args)
-        if False:
+        if True:
             pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(args.device)
-            torch.save(pre_trained_word2vec, "./word_vec.fuck")
+            torch.save(pre_trained_word2vec, "./word_vec_math.fuck")
         else:
-            pre_trained_word2vec = torch.load("./word_vec.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_mathss.fuck")
         train(args, train_data, val_data, pre_trained_word2vec, content)
         args.cov_pretrain = False
 if __name__ == '__main__':

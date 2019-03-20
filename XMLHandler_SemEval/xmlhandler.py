@@ -90,15 +90,15 @@ def keepOneAnswer(question_answer_user_vote):
     # If a user answer the same question for many times, only store the highest vote answer
     for line in question_answer_user_vote:
         th = (line[0], line[2])
-        try:
-            score = line[3]
-        except:
+        if len(line) < 5:
             score = 0
-        if th in question_user_dic:
-            if question_user_dic[th][-1] < score:
-                question_user_dic[th] = [line[1], score]
         else:
-            question_user_dic[th] = [line[1], score]
+            score = line[3]
+        if th in question_user_dic:
+            if question_user_dic[th][1] < score:
+                question_user_dic[th] = [line[1], score, line[-1]]
+        else:
+            question_user_dic[th] = [line[1], score, line[-1]]
 
     remove_multiple_edge = []
     for key, value in question_user_dic.items():
@@ -106,30 +106,31 @@ def keepOneAnswer(question_answer_user_vote):
         answer_id = value[0]
         user_id = key[1]
         score = value[1]
-        temp = [question_id, answer_id, user_id, score]
+        cate = value[2]
+        temp = [question_id, answer_id, user_id, score, cate]
         remove_multiple_edge.append(temp)
     return remove_multiple_edge
 
-def idReorder(question_answer_user_label, content, user_context):
+def idReorder(question_answer_user_label_cate, content, user_context):
     user_context_reorder = {}
-    t2 = len(question_answer_user_label)
+    t2 = len(question_answer_user_label_cate)
 
-    question_answer_user_label = keepOneAnswer(question_answer_user_label)
-    user = np.array([line[2] for line in question_answer_user_label])
+    question_answer_user_label_cate = keepOneAnswer(question_answer_user_label_cate)
+    user = np.array([line[2] for line in question_answer_user_label_cate])
     user_id = np.unique(user)
     user_count = len(user_id)
     user_dic = {id: index for index, id in enumerate(user_id)}
 
-    th = set([(line[0], line[2]) for line in question_answer_user_label])
+    th = set([(line[0], line[2]) for line in question_answer_user_label_cate])
     t1 = len(th)
 
     print("[INFO] Duplicate answer is {}".format(t1-t2))
-    print("[INFO] Semival Question Answer Pairs: {}".format(len(question_answer_user_label)))
+    print("[INFO] Semival Question Answer Pairs: {}".format(len(question_answer_user_label_cate)))
     print("[INFO] Semival User Count {}".format(len(user_id)))
 
 
-    question = [line[0] for line in question_answer_user_label]
-    answer = [line[1] for line in question_answer_user_label]
+    question = [line[0] for line in question_answer_user_label_cate]
+    answer = [line[1] for line in question_answer_user_label_cate]
     question_id = np.unique(question)
     question_dic = { id: index for index, id in enumerate(question_id)}
     question_count = len(question_id)
@@ -140,11 +141,11 @@ def idReorder(question_answer_user_label, content, user_context):
     print("[INFO] Semival Answer Count {}".format(len(answer_id)))
 
 
-    for line_index in range(len(question_answer_user_label)):
-        question_answer_user_label[line_index][0] = question_dic[question[line_index]] + user_count
-        question_answer_user_label[line_index][1] = answer_dic[answer[line_index]] + user_count
-        question_answer_user_label[line_index][2] = user_dic[user[line_index]]
-    assert (len(question) == len(answer) and (len(question) == len(user)) and (len(question )== len(question_answer_user_label))), "ERROR not equal user answer question count"
+    for line_index in range(len(question_answer_user_label_cate)):
+        question_answer_user_label_cate[line_index][0] = question_dic[question[line_index]] + user_count
+        question_answer_user_label_cate[line_index][1] = answer_dic[answer[line_index]] + user_count
+        question_answer_user_label_cate[line_index][2] = user_dic[user[line_index]]
+    assert (len(question) == len(answer) and (len(question) == len(user)) and (len(question ) == len(question_answer_user_label_cate))), "ERROR not equal user answer question count"
 
     one_answer_question_user = 0
     for user_id, context in user_context.items():
@@ -165,7 +166,7 @@ def idReorder(question_answer_user_label, content, user_context):
 
     content_evaluation("answer", content, answer_id)
     content_evaluation("question", content, question_id)
-    return question_answer_user_label, content_reorder, user_context_reorder, user_count, question_count
+    return question_answer_user_label_cate, content_reorder, user_context_reorder, user_count, question_count
 
 
 
@@ -177,23 +178,25 @@ def read_xml_data(path):
     sub_dirs = os.listdir(path)
     sub_dirs = [os.path.join(path,dir) for dir in sub_dirs if os.path.isdir(os.path.join(path,dir))]
     content = []
-    question_answer_user_label = []
+    question_answer_user_label_cate = []
     content_id = 0
     user_dic = {}
     user_context = {}
+    category_dic = {}
     for sub_dir in sub_dirs:
         print(sub_dir)
         for file in os.listdir(sub_dir):
             if ("subtaskA" in file or "subtaskA" in sub_dir) and "multiline" not in file and "xml"in file:
                 print("File Name is {}".format(file))
                 file = os.path.join(sub_dir, file)
-                content_file, question_answer_user_label_file, user_dic, content_id, user_context = parse(file, user_dic=user_dic, content_id=content_id, user_context=user_context)
+                content_file, question_answer_user_label_file, user_dic, content_id, user_context, category_dic = parse(file, user_dic=user_dic, content_id=content_id, user_context=user_context,
+                                                                                                          category_dic=category_dic)
                 content += content_file
-                question_answer_user_label += question_answer_user_label_file
-    return content, question_answer_user_label, user_context
+                question_answer_user_label_cate += question_answer_user_label_file
+    return content, question_answer_user_label_cate, user_context
 
 def main(path):
     print("HELLO SEMINAL")
-    content, question_answer_user_label, user_context = read_xml_data(path)
-    question_answer_user_label, content, user_context, user_count, question_count= idReorder(question_answer_user_label, content, user_context)
-    return  question_answer_user_label, content, user_context, user_count, question_count
+    content, question_answer_user_label_cate, user_context = read_xml_data(path)
+    question_answer_user_label_cate, content, user_context, user_count, question_count = idReorder(question_answer_user_label_cate, content, user_context)
+    return  question_answer_user_label_cate, content, user_context, user_count, question_count

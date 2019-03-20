@@ -92,6 +92,51 @@ def classify_collect_fn_hybrid(batch):
     question_id = torch.LongTensor(question_id)
     return question_content, answer_content, user_context, label_list, question_id
 
+def classify_collect_fn_Nei(batch):
+    q_iter, question_key, question_neighbor, question_neighbor_key, a_iter, u_iter, gt_iter = list(zip(*batch))
+    q_iter = torch.LongTensor(q_iter)
+    question_key = torch.FloatTensor(question_key)
+    question_neighbor = torch.LongTensor(question_neighbor)
+    question_neighbor_key = torch.FloatTensor(question_neighbor_key)
+    a_iter = torch.LongTensor(a_iter)
+    u_iter = torch.LongTensor(u_iter)
+    gt_iter = torch.LongTensor(gt_iter)
+    return q_iter, question_key, question_neighbor, question_neighbor_key, a_iter, u_iter, gt_iter
+
+class classifyDataNei(data.Dataset):
+    def __init__(self,
+                 args,
+                 question_answer_user_vote,
+                 question_neighbor_finder,
+                 user_count
+                 ):
+        self.args = args
+        self.question_answer_user_vote = question_answer_user_vote
+        self.question_neighbor_finder = question_neighbor_finder
+        self.user_count = user_count
+        self.k = args.k_neighbor
+
+
+    def __len__(self):
+        return len(self.question_answer_user_vote)
+
+    def __getitem__(self, index):
+        question_answer_vote_line = self.question_answer_user_vote[index]
+        question_id = question_answer_vote_line[0]
+        question_key = self.question_neighbor_finder.get_item(question_id - self.user_count)
+        question_neighbor = self.question_neighbor_finder.find_by_index(question_id - self.user_count, self.k)
+        question_neighbor_feature = [self.question_neighbor_finder.get_item(i) for i in question_neighbor]
+        question_neighbor = [item + self.user_count for item in question_neighbor]
+
+
+        answer_id = question_answer_vote_line[1]
+        user_id = question_answer_vote_line[2]
+        label = question_answer_vote_line[3]
+
+        return question_id,  question_key,  question_neighbor, question_neighbor_feature, answer_id, user_id, label
+
+
+
 class classifyDataEdge(data.Dataset):
     def __init__(self,
                  args,
@@ -168,7 +213,7 @@ class rankDataSetEdge(data.Dataset):
         edges = []
         for edge in self.G.edges(data=True):
             train_removed = edge[2]['train_removed']
-            if self.is_training and train_removed:
+            if self.is_training and ~train_removed:
                 edges.append(edge)
             elif ~self.is_training and train_removed:
                 edges.append(edge)
@@ -338,7 +383,9 @@ class classifyDataSetUserContext(data.Dataset):
         question_content = self.content_embed.content_embed(question_id - self.user_count)
         user_context = self.get_user_context(question_answer_vote_line[2]) if self.is_hybrid else question_answer_vote_line[2]
         label = question_answer_vote_line[3]
+
         return question_content, answer_content, user_context, label, question_id
+
 
 
 class rankDataSetUserContext(data.Dataset):
@@ -554,54 +601,48 @@ class rankData(data.Dataset):
 
 
 
-class clasifyDataSet(data.Dataset):
-
-    def __init__(self,
-                 G,
-                 args,
-                 question_list,
-                 user_context=None,
-                 content=None,
-                 user_count = None
-                 ):
-        self.G = G
-        self.args = args
-        self.question_used = question_list
-        self.user_context = user_context
-        self.content = content
-        self.user_count = user_count
-
-
-
-    def __len__(self):
-        return len(self.question_used)
-
-    def __getitem__(self,   idx):
-        question_id = self.question_used[idx]
-        users = self.G.neighbors(question_id)
-
-        question_list = []
-        user_list = []
-        label_list = []
-        answer_list = []
-        for user in users:
-            answer = self.G[question_id][user]['a_id']
-            label = self.G[question_id][user]['score']
-            question_list.append(question_id)
-            if self.user_context is not None:
-                document = []
-                for post_id in self.user_context[user]:
-                    document += self.content.content_embed(post_id - self.user_count)
-                    if len(document) > self.args.max_u_len:
-                        document = document[:self.args.max_u_len]
-                        break
-                if len(document) < self.args.max_u_len:
-                    pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
-                    document += pad_word
-                user_list.append(document)
-            else:
-                user_list.append(user)
-            answer_list.append(answer)
-            label_list.append(label)
-
-        return question_list, answer_list, user_list, label_list, [len(question_list)]
+# class clasifyDataSet(data.Dataset):
+#
+#     def __init__(self,
+#                  data,
+#                  question_finder
+#                  ):
+#         self.data = data
+#         self.question_finder = question_finder
+#
+#     def __len__(self):
+#         return len(self.data)
+#
+#     def __getitem__(self,   idx):
+#         line = self.data[idx]
+#         question_index = line[0]
+#         answer_index = line[1]
+#         user_index = line[2]
+#         label = line[3]
+#         users = self.G.neighbors(question_id)
+#
+#         question_list = []
+#         user_list = []
+#         label_list = []
+#         answer_list = []
+#         for user in users:
+#             answer = self.G[question_id][user]['a_id']
+#             label = self.G[question_id][user]['score']
+#             question_list.append(question_id)
+#             if self.user_context is not None:
+#                 document = []
+#                 for post_id in self.user_context[user]:
+#                     document += self.content.content_embed(post_id - self.user_count)
+#                     if len(document) > self.args.max_u_len:
+#                         document = document[:self.args.max_u_len]
+#                         break
+#                 if len(document) < self.args.max_u_len:
+#                     pad_word = [Constants.PAD] * (self.args.max_u_len - len(document))
+#                     document += pad_word
+#                 user_list.append(document)
+#             else:
+#                 user_list.append(user)
+#             answer_list.append(answer)
+#             label_list.append(label)
+#
+#         return question_list, answer_list, user_list, label_list, [len(question_list)]

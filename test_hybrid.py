@@ -19,7 +19,7 @@ os.chdir("/home/yichuan/course/induceiveAnswer")
 from Visualization.logger import Logger
 
 info = {}
-logger = Logger('./logs_hybrid')
+logger = Logger('./logs_hybrid_class')
 i_flag = 0
 train_epoch_count = 0
 eval_epoch_count = 0
@@ -129,10 +129,10 @@ def train_epoch(model, data, optimizer, args, train_epoch_count):
             question_list, answer_pos_list, user_good_context, _, answer_neg_list, user_neg_context= map(lambda x: x.to(args.device), batch)
             args.batch_size = question_list.shape[0]
             optimizer.zero_grad()
+            line += args.batch_size
             score_pos = model(question_list, answer_pos_list, user_good_context)[0]
             score_neg = model(question_list, answer_neg_list, user_neg_context)[0]
             loss = torch.sum(loss_fn(score_pos, score_neg))
-
         # logger.scalar_summary("train_loss", loss.item(), train_epoch_count)
         loss1 += loss.item()
         loss.backward()
@@ -227,8 +227,8 @@ def eval_epoch(model, data, args, eval_epoch_count):
            mRP += mean_reciprocal_rank([rank_gt])
            p_at_one += precision_at_k([rank_gt], args.precesion_at_k)
         else:
-            rank_answer_content = [line[0] for line in answer_score_gt_reorder]
-            diversity_answer_recommendation.append(rank_answer_content)
+            # rank_answer_content = [line[0] for line in answer_score_gt_reorder]
+            # diversity_answer_recommendation.append(rank_answer_content)
             ndcg_loss += ndcg_at_k(rank_gt, args.ndcg_k)
             if np.argmax(rank_gt) == 0:
                 p_at_one += 1
@@ -291,13 +291,13 @@ def train(args, train_data, val_data ,pre_trained_word2vec, content):
 
         train_epoch(model, train_data, optimizer, args, epoch_i)
 
-        diversity_answer_recommendation = eval_epoch(model, val_data, args, epoch_i)
-        if args.is_classification is False:
-            tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, args.div_topK, tfidf, lda)
-
-            info_val['tfidf_cov'] = tfidf_cov
-            info_val['lda_cov'] = lda_cov
-            print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
+        eval_epoch(model, val_data, args, epoch_i)
+        # if args.is_classification is False:
+        #     tfidf_cov, lda_cov = diversity_evaluation(diversity_answer_recommendation, args.div_topK, tfidf, lda)
+        #
+        #     info_val['tfidf_cov'] = tfidf_cov
+        #     info_val['lda_cov'] = lda_cov
+        #     print("[INFO] tfidf coverage {}, lda coverage {}".format(tfidf_cov, lda_cov))
         for tag, value in info_val.items():
             logger.scalar_summary(tag, value, epoch_i)
 
@@ -317,15 +317,23 @@ def main():
         data = torch.load(args.data)
         word2ix = data['dict']
         content = data['content']
-        pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(
-            args.device)
+        # pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix, args.DEBUG).to(
+        #     args.device)
         train_data, val_data = prepare_dataloaders(data, args)
 
+        if False:
+            pre_trained_word2vec = loadEmbed(args.embed_fileName, args.embed_size, args.vocab_size, word2ix,
+                                             args.DEBUG).to(args.device)
+            torch.save(pre_trained_word2vec, "./word_vec_class.fuck")
+            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+        else:
+            pre_trained_word2vec = torch.load("./word_vec_class.fuck")
+
         args.is_classification = True if "SemEval" in datan else False
-        paragram_dic = {"lstm_hidden_size": [32, 64, 128, 256],
-                        "lstm_num_layers": [1, 2, 3, 4],
-                        "drop_out_lstm": [0.3, 0.5],
-                        "lr": [1e-4, 1e-3, 1e-2],
+        paragram_dic = {"lstm_hidden_size": [128, 256],
+                        "lstm_num_layers": [2, 3],
+                        "drop_out_lstm": [0.3,0.5],
+                        "lr": [1e-4, 5e-4, 1e-3],
                         # "margin": [0.1, 0.2, 0.3]
                         }
         pragram_list = grid_search(paragram_dic)

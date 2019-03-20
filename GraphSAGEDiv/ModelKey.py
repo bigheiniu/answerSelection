@@ -48,8 +48,7 @@ class InducieveLearningQA(nn.Module):
         self.a_edge_generate = EdgeGenerate()
 
         self.num_class = 2 if self.args.is_classification else 1
-        input_dim = self.key_dim + self.value_dim
-        self.score_fn = ARMNLScore(input_dim)
+        self.score_fn = ARMNLScore(self.value_dim + self.key_dim)
         # self.score_fn = WeightScore(self.value_dim, self.num_class)
 
 
@@ -259,9 +258,7 @@ class InducieveLearningQA(nn.Module):
             predic = torch.argmax(score, dim=-1)
             return_list = [score, predic]
         else:
-            return [score]
-            # score = self.w_final(score).view(-1,)
-            # return_list = [score]
+            return_list = [score]
         # if need_feature:
         #     answer_vec = answer_edge_feaure.detach()
         #     return_list.append(answer_vec)
